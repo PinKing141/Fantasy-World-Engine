@@ -126,6 +126,10 @@ class CivilizationSnapshot:
     severed_routes: int
     court: CourtSnapshot
     factions: tuple[FactionSnapshot, ...]
+    region_name: str = ""
+    terrain_name: str = ""
+    map_x: int = 0
+    map_y: int = 0
 
 
 @dataclass(frozen=True, slots=True)

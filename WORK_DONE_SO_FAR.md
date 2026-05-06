@@ -16,6 +16,10 @@ This file summarizes the major work completed so far on the current modular Fant
 - Phase 10 is complete: ruling households now form explicit consort marriage state, heirs can emerge from two-parent household context, and succession can regenerate the ruling household instead of relying on a one-parent lineage fallback alone.
 - Phase 11 is complete: agents now hold explicit profession state, victorious generals can rise into named heroic figures, and heroic reputation can change later campaign power.
 - Phase 12 is complete: faith conflict can now bias war-target choice and major faith-opposed wars can emit explicit holy-war events instead of remaining only domestic schism pressure.
+- Phase 13 is complete: the visual layer can now export a deterministic static world map image from step-result snapshots, showing region positions, labels, terrain names, and route-state differences without changing the Rich runtime.
+- Phase 14 is complete: world generation now uses `noise` to drive deterministic procedural region selection, terrain assignment, position placement, and geography-biased climate values instead of relying only on a fixed blueprint shuffle.
+- Phase 15 is complete: the static map export now generates shapely-based territory polygons from region centers and renders filled territorial areas with explicit border geometry instead of only points and lines.
+- The next approved phase is Phase 16 static terrain surface and cartography, which should stay on the static export layer and add deterministic land, water, coastline, and relief rendering before any interactive runtime work begins.
 
 ## Active Runtime Surface
 
@@ -23,6 +27,9 @@ This file summarizes the major work completed so far on the current modular Fant
 - Active package root: `fantasy_engine/`
 - Verified runtime command: `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe main.py`
 - Verified batch launcher: `run_fantasy_engine.bat`
+- Static export surface: `fantasy_engine.visual.world_map.export_world_map(step_result, output_path)`
+- Entry-point export flag: `main.py --export-map <path>` writes a static PNG for the final observed simulation state.
+- Static territory geometry helper: `fantasy_engine.world.territories.build_territory_polygons(...)`
 - Current simulation phases: `climate -> economy -> trade -> society -> characters -> factions -> diplomacy -> military`
 - Current live runtime stack: `World -> SeasonStepResult -> SimulationController -> Rich runner -> Rich renderer`
 - Watch mode can now run open-ended when `--years` is omitted and stop only when the user quits.
@@ -40,6 +47,9 @@ This file summarizes the major work completed so far on the current modular Fant
 - Added region generation and explicit route topology in `fantasy_engine/world/map.py`.
 - Added explicit trade route and shipment data models in `fantasy_engine/world/routes.py`.
 - Added climate updates in `fantasy_engine/world/climate.py`.
+- Replaced fixed region blueprint shuffling in `fantasy_engine/world/map.py` with a minimal `noise`-driven procedural geography layer while preserving the existing deterministic world bootstrap and route-construction seam.
+- Added shapely-based territory geometry in `fantasy_engine/world/territories.py` so region centers can resolve into clipped polygonal territory areas for the static export surface.
+- The next map-facing gap is no longer political border geometry; it is terrain cartography on the existing static export surface.
 
 ## Live Runtime, Controller, And Rich Watch Mode
 
@@ -100,6 +110,7 @@ This file summarizes the major work completed so far on the current modular Fant
 - Updated economy routing in [fantasy_engine/systems/economy.py](c:/Users/Favour/Documents/Fantasy%20Engine/fantasy_engine/systems/economy.py) so import scoring, food pricing, and trade revenue read terrain-driven travel cost instead of distance alone.
 - Updated military campaigning in [fantasy_engine/systems/military.py](c:/Users/Favour/Documents/Fantasy%20Engine/fantasy_engine/systems/military.py) so corridor terrain raises supply burden and lowers campaign efficiency on harsher approaches.
 - Updated foundation and battle narrative details in [fantasy_engine/world/world.py](c:/Users/Favour/Documents/Fantasy%20Engine/fantasy_engine/world/world.py) and [fantasy_engine/systems/military.py](c:/Users/Favour/Documents/Fantasy%20Engine/fantasy_engine/systems/military.py) so the new geography slice is visible in existing history output.
+- Added seeded procedural geography in [fantasy_engine/world/map.py](c:/Users/Favour/Documents/Fantasy%20Engine/fantasy_engine/world/map.py) so region selection, terrain identity, coordinates, fertility, rainfall, winter severity, and route cost can vary meaningfully by seed while remaining deterministic for the same seed.
 
 ## Characters, Names, Lineage, And Cultural Drift
 
@@ -156,6 +167,9 @@ This file summarizes the major work completed so far on the current modular Fant
 - Added height-aware summary rendering so short terminals keep controls visible instead of clipping the bottom of the frame.
 - Updated the court `Parent` display to show readable parent names instead of internal agent IDs.
 - Added run-end legends output so compact demos can show recent causal chains alongside the existing cause/effect panel.
+- Added a `matplotlib`-based static world map exporter in `fantasy_engine.visual.world_map` that renders region markers, terrain labels, and route-state styling from the existing snapshot DTO layer.
+- Added minimal `main.py` wiring so the entry point can export the current world map directly with `--export-map`.
+- Extended `fantasy_engine.visual.world_map` so the static export now renders filled territory polygons and visible border edges beneath the existing route and label layers.
 
 ## Legends Rebuild
 
@@ -172,6 +186,10 @@ This file summarizes the major work completed so far on the current modular Fant
 - Added `tests/test_personal_consequence.py` for the focused Phase 8 court-bond and bereavement regressions.
 - Added `tests/test_heroes_and_professions.py` for the focused Phase 11 profession and hero-emergence regressions.
 - Added `tests/test_holy_war.py` for the focused Phase 12 confessional-war regressions.
+- Added `tests/test_static_world_map.py` for the focused Phase 13 deterministic map-view and static PNG export regressions.
+- Extended `tests/test_static_world_map.py` so the entry point now has focused coverage for final-state map export and `--export-map` CLI argument plumbing.
+- Extended `tests/test_terrain_properties.py` with a focused Phase 14 regression proving seeded procedural geography stays deterministic per seed, varies across seeds, and still produces usable routes.
+- Extended `tests/test_static_world_map.py` with a focused Phase 15 regression proving the exported view includes deterministic territory polygons for each civilization.
 - Added `tests/test_legends_reader.py` for the new legends reader and run-end legends rendering surface.
 - Added `tests/test_terrain_properties.py` for the focused Phase 6 terrain regressions.
 - Added `tests/test_step_result_and_controller.py` for the live runtime, controller, renderer, and watch controls.
@@ -321,4 +339,5 @@ This file summarizes the major work completed so far on the current modular Fant
 - The Rich dashboard is intended for terminal observation, not archival reporting.
 - The tests now cover lineage/culture behavior plus the live runner and controller surface, but broader economic or military regression coverage is still limited.
 - The current roadmap phases are complete through Phase 12.
-- No next phase is approved yet; the next step should be to define a fresh post-Phase-12 target before further source changes.
+- The next approved phase is Phase 13 static world map visualization, and it should begin with a focused deterministic export regression built on the existing world snapshot surface.
+- There is no approved post-Phase-15 phase yet; interactive rendering remains explicitly deferred to the later `pygame-ce` phase and should not begin without fresh approval.

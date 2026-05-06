@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
+from noise import snoise2
+
 from fantasy_engine.core.rng import SeededRNG
 from fantasy_engine.world.routes import RouteTerrain, TradeRoute
 
@@ -42,6 +44,8 @@ class WorldMap:
         "frozen_march": ("Frozen March", 0.78, 0.94, 1.24, 1.16, 1.10),
         "sun_baked_flats": ("Sun-Baked Flats", 0.76, 0.82, 1.18, 1.12, 0.94),
     }
+    GRID_WIDTH = 9
+    GRID_HEIGHT = 6
     REGION_BLUEPRINTS = (
         ("Greenreach Vale", 1.35, 1.15, 0.80, 1.10, "river_vale", 2, 4),
         ("Ashen Steppe", 0.88, 0.75, 1.05, 1.65, "wind_steppe", 6, 2),
@@ -53,18 +57,29 @@ class WorldMap:
 
     @classmethod
     def generate(cls, rng: SeededRNG, count: int) -> list[Region]:
-        blueprints = list(cls.REGION_BLUEPRINTS)
-        rng.shuffle(blueprints)
+        map_seed = rng.randint(10_000, 999_999)
+        blueprints = cls._select_blueprints(map_seed, count)
         regions: list[Region] = []
-        for name, fertility, rainfall, winter_severity, route_cost, terrain_key, x, y in blueprints[:count]:
+        used_positions: set[tuple[int, int]] = set()
+        for index, (name, fertility, rainfall, winter_severity, route_cost, terrain_key, _, _) in enumerate(blueprints):
+            x, y = cls._claim_position(map_seed, index, used_positions)
+            moisture = cls._noise_value(map_seed, x, y, channel=17 + index)
+            elevation = cls._noise_value(map_seed, x, y, channel=43 + index)
+            temperature = cls._noise_value(map_seed, x, y, channel=79 + index)
+            resolved_terrain_key = cls._terrain_key_for(
+                preferred_terrain=terrain_key,
+                moisture=moisture,
+                elevation=elevation,
+                temperature=temperature,
+            )
             regions.append(
                 Region(
                     name=name,
-                    fertility=fertility,
-                    rainfall=rainfall,
-                    winter_severity=winter_severity,
-                    route_cost=route_cost,
-                    terrain=cls._region_terrain(terrain_key),
+                    fertility=cls._clamp(fertility + moisture * 0.14 - elevation * 0.08, 0.65, 1.45),
+                    rainfall=cls._clamp(rainfall + moisture * 0.18, 0.55, 1.35),
+                    winter_severity=cls._clamp(winter_severity - temperature * 0.16 + elevation * 0.05, 0.75, 1.55),
+                    route_cost=cls._clamp(route_cost + elevation * 0.16 + abs(moisture) * 0.05, 0.95, 1.95),
+                    terrain=cls._region_terrain(resolved_terrain_key),
                     x=x,
                     y=y,
                 )
@@ -80,23 +95,110 @@ class WorldMap:
                 key=lambda other: cls._route_distance(region, other),
             )
             for neighbor in neighbors[:2]:
-                key = tuple(sorted((region.name, neighbor.name)))
-                if key in routes:
-                    continue
-                distance = cls._route_distance(region, neighbor)
-                average_cost = (region.route_cost + neighbor.route_cost) / 2.0
-                corridor = cls._route_terrain(region, neighbor, distance)
-                capacity = max(8, int(22 - distance * 2.4 - average_cost * 3.0 + rng.uniform(-2.0, 2.0)))
-                risk = min(0.38, 0.06 * distance + 0.04 * average_cost)
-                routes[key] = TradeRoute(
-                    region_a=key[0],
-                    region_b=key[1],
-                    distance=distance,
-                    capacity=capacity,
-                    risk=risk,
-                    terrain=corridor,
-                )
+                cls._add_route(routes, region, neighbor, rng)
+
+        if len(regions) >= 2:
+            cls._add_route(routes, regions[0], regions[1], rng)
         return routes
+
+    @classmethod
+    def _add_route(
+        cls,
+        routes: dict[tuple[str, str], TradeRoute],
+        region: Region,
+        neighbor: Region,
+        rng: SeededRNG,
+    ) -> None:
+        key = tuple(sorted((region.name, neighbor.name)))
+        if key in routes:
+            return
+        distance = cls._route_distance(region, neighbor)
+        average_cost = (region.route_cost + neighbor.route_cost) / 2.0
+        corridor = cls._route_terrain(region, neighbor, distance)
+        capacity = max(8, int(22 - distance * 2.4 - average_cost * 3.0 + rng.uniform(-2.0, 2.0)))
+        risk = min(0.38, 0.06 * distance + 0.04 * average_cost)
+        routes[key] = TradeRoute(
+            region_a=key[0],
+            region_b=key[1],
+            distance=distance,
+            capacity=capacity,
+            risk=risk,
+            terrain=corridor,
+        )
+
+    @classmethod
+    def _select_blueprints(cls, map_seed: int, count: int) -> list[tuple[str, float, float, float, float, str, int, int]]:
+        scored_blueprints: list[tuple[float, tuple[str, float, float, float, float, str, int, int]]] = []
+        for index, blueprint in enumerate(cls.REGION_BLUEPRINTS):
+            _, fertility, rainfall, winter_severity, route_cost, _, _, _ = blueprint
+            score = (
+                cls._noise_value(map_seed, index + 1, fertility + rainfall, channel=5)
+                + fertility * 0.08
+                - winter_severity * 0.04
+                - route_cost * 0.03
+            )
+            scored_blueprints.append((score, blueprint))
+        scored_blueprints.sort(key=lambda item: (item[0], item[1][0]), reverse=True)
+        return [blueprint for _, blueprint in scored_blueprints[:count]]
+
+    @classmethod
+    def _claim_position(cls, map_seed: int, index: int, used_positions: set[tuple[int, int]]) -> tuple[int, int]:
+        best_position: tuple[int, int] | None = None
+        best_score = -999.0
+        for x in range(cls.GRID_WIDTH):
+            for y in range(cls.GRID_HEIGHT):
+                if (x, y) in used_positions:
+                    continue
+                placement = cls._noise_value(map_seed, x + index * 1.7, y + index * 2.3, channel=29)
+                spacing_bonus = 0.0
+                if used_positions:
+                    nearest_neighbor = min(math.dist((x, y), position) for position in used_positions)
+                    spacing_bonus = min(0.85, nearest_neighbor * 0.14)
+                center_bias = -abs(x - (cls.GRID_WIDTH - 1) / 2) * 0.03 - abs(y - (cls.GRID_HEIGHT - 1) / 2) * 0.04
+                score = placement + spacing_bonus + center_bias
+                if score > best_score:
+                    best_score = score
+                    best_position = (x, y)
+
+        if best_position is None:
+            raise ValueError("No map position available for region placement.")
+
+        used_positions.add(best_position)
+        return best_position
+
+    @classmethod
+    def _terrain_key_for(
+        cls,
+        *,
+        preferred_terrain: str,
+        moisture: float,
+        elevation: float,
+        temperature: float,
+    ) -> str:
+        terrain_scores = {
+            "river_vale": moisture * 1.05 - abs(elevation) * 0.28 + (0.32 if preferred_terrain == "river_vale" else 0.0),
+            "wind_steppe": 0.18 - abs(moisture) * 0.52 + temperature * 0.24 + (0.32 if preferred_terrain == "wind_steppe" else 0.0),
+            "stone_basin": elevation * 0.86 - moisture * 0.16 + (0.32 if preferred_terrain == "stone_basin" else 0.0),
+            "storm_coast": moisture * 0.74 + abs(elevation) * 0.10 + (0.32 if preferred_terrain == "storm_coast" else 0.0),
+            "frozen_march": -temperature * 0.92 + elevation * 0.24 + (0.32 if preferred_terrain == "frozen_march" else 0.0),
+            "sun_baked_flats": temperature * 0.88 - moisture * 0.90 + (0.32 if preferred_terrain == "sun_baked_flats" else 0.0),
+        }
+        return max(terrain_scores, key=terrain_scores.get)
+
+    @staticmethod
+    def _noise_value(map_seed: int, x: float, y: float, *, channel: int) -> float:
+        return snoise2(
+            (x + channel * 1.73 + map_seed * 0.0013) / 3.6,
+            (y - channel * 1.19 - map_seed * 0.0011) / 3.6,
+            octaves=3,
+            persistence=0.5,
+            lacunarity=2.0,
+            base=map_seed + channel * 97,
+        )
+
+    @staticmethod
+    def _clamp(value: float, lower: float, upper: float) -> float:
+        return max(lower, min(upper, round(value, 3)))
 
     @classmethod
     def _region_terrain(cls, terrain_key: str) -> RegionTerrain:

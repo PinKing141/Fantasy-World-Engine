@@ -6,11 +6,39 @@ from unittest.mock import patch
 from fantasy_engine.systems.economy import EconomySystem
 from fantasy_engine.systems.military import MilitarySystem
 from fantasy_engine.core.engine import TickContext
+from fantasy_engine.core.rng import SeededRNG
 from fantasy_engine.world.climate import ClimateSystem
+from fantasy_engine.world.map import WorldMap
 from fantasy_engine.world.world import World
 
 
 class TerrainPropertyTests(unittest.TestCase):
+    def test_procedural_geography_is_deterministic_per_seed_and_varies_across_seeds(self) -> None:
+        same_seed_left = WorldMap.generate(SeededRNG(4242), 6)
+        same_seed_right = WorldMap.generate(SeededRNG(4242), 6)
+        different_seed = WorldMap.generate(SeededRNG(9898), 6)
+
+        left_signature = sorted(
+            (region.name, region.terrain.name, region.x, region.y, round(region.fertility, 3), round(region.rainfall, 3))
+            for region in same_seed_left
+        )
+        right_signature = sorted(
+            (region.name, region.terrain.name, region.x, region.y, round(region.fertility, 3), round(region.rainfall, 3))
+            for region in same_seed_right
+        )
+        different_signature = sorted(
+            (region.name, region.terrain.name, region.x, region.y, round(region.fertility, 3), round(region.rainfall, 3))
+            for region in different_seed
+        )
+
+        self.assertEqual(left_signature, right_signature)
+        self.assertNotEqual(left_signature, different_signature)
+        self.assertEqual(len({(region.x, region.y) for region in same_seed_left}), len(same_seed_left))
+
+        same_seed_routes = WorldMap.build_trade_routes(same_seed_left, SeededRNG(4242))
+        self.assertTrue(same_seed_routes)
+        self.assertTrue(all(route.distance > 0 for route in same_seed_routes.values()))
+
     def test_region_terrain_changes_harvest_for_same_climate_state(self) -> None:
         fertile_world = World(seed=4242, num_civilizations=4)
         harsh_world = World(seed=4242, num_civilizations=4)

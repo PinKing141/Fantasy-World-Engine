@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from fantasy_engine.runner import SimulationController, run_with_rich
-from fantasy_engine.visual import RichDashboardRenderer
+from fantasy_engine.visual import RichDashboardRenderer, export_world_map
 from fantasy_engine.visual.dashboard import make_dashboard_snapshot
 from fantasy_engine.world.world import World
 
@@ -16,6 +16,7 @@ def run_demo(
     pace_seconds: float = 0.0,
     clear_between_years: bool = False,
     honor_autopause: bool = True,
+    export_map_path: str | None = None,
 ) -> None:
     world = World(seed=seed, num_civilizations=4)
     controller = SimulationController(world, initial_speed=max(0.25, pace_seconds if pace_seconds > 0.0 else 1.0))
@@ -29,6 +30,7 @@ def run_demo(
             honor_autopause=honor_autopause,
             clear_between_frames=clear_between_years,
         )
+        _maybe_export_map(world, renderer, output_path=export_map_path)
         return
 
     opening_result = controller.current_result()
@@ -46,6 +48,18 @@ def run_demo(
         renderer.console.print("\nRun interrupted by user.")
 
     renderer.render_run_end(world.history.cause_effect_pairs()[-8:], world.recent_legend_summaries(limit=3))
+    _maybe_export_map(world, renderer, output_path=export_map_path)
+
+
+def _maybe_export_map(world: World, renderer: RichDashboardRenderer, *, output_path: str | None) -> None:
+    if not output_path:
+        return
+
+    map_view = export_world_map(world.snapshot_current_state(), output_path)
+    renderer.console.print(
+        f"Static map exported to {output_path} for Year {map_view.year} {map_view.season.title()} with "
+        f"{len(map_view.civilizations)} regions and {len(map_view.routes)} routes."
+    )
 
 
 def main() -> None:
@@ -80,6 +94,12 @@ def main() -> None:
         default=True,
         help="Stop the Rich watch runner when a curated autopause event fires.",
     )
+    parser.add_argument(
+        "--export-map",
+        type=str,
+        default=None,
+        help="Write a static PNG world map for the final observed simulation state to the given path.",
+    )
     args = parser.parse_args()
     run_demo(
         seed=args.seed,
@@ -88,6 +108,7 @@ def main() -> None:
         pace_seconds=args.pace_seconds,
         clear_between_years=not args.no_clear,
         honor_autopause=args.autopause,
+        export_map_path=args.export_map,
     )
 
 

@@ -411,6 +411,10 @@ class World:
                         )
                         for faction in civilization.factions
                     ),
+                    region_name=civilization.region.name,
+                    terrain_name=civilization.region.terrain.name,
+                    map_x=civilization.region.x,
+                    map_y=civilization.region.y,
                 )
             )
         return snapshots

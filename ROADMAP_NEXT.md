@@ -483,19 +483,172 @@ Deliverables:
 - explicit faith-war event chain
 - focused holy-war regressions
 
+## Phase 13: Static World Map Visualization
+
+Status: Complete
+
+Scope:
+
+- `fantasy_engine/world/world.py`
+- `fantasy_engine/world/map.py` only if minor read helpers are needed
+- a new visualization or export module under `fantasy_engine/`
+- `main.py` only if minimal non-watch export wiring is needed
+- focused tests only
+
+Success criteria:
+
+- the engine can render a deterministic static map image for a seeded world
+- regions are shown in their current positions with distinct civilization ownership or labels
+- routes are shown with visible route state differences such as open, contested, or severed
+- the map remains an observer or export surface rather than replacing the current Rich runtime
+- the output is useful for quickly understanding world geography and political state
+
+Do not touch:
+
+- procedural terrain generation
+- polygon border math
+- territorial Voronoi ownership systems
+- pygame or a second interactive rendering runtime
+- broad UI rewrites
+
+Deliverables:
+
+- `matplotlib` dependency
+- one static map renderer or export path
+- focused deterministic map-output regressions
+
+## Phase 14: Procedural Geography Foundation
+
+Status: Complete
+
+Scope:
+
+- `fantasy_engine/world/map.py`
+- `fantasy_engine/world/world.py` only if world construction needs a narrow geometry handoff
+- `fantasy_engine/visual/world_map.py` only if minimal preview support is needed for validation
+- focused tests only
+
+Success criteria:
+
+- seeded world generation no longer depends only on shuffled fixed blueprints for region placement and terrain assignment
+- `noise` drives at least one deterministic geography layer such as elevation, moisture, fertility bias, or regional clustering
+- the same seed produces the same geography while different seeds can produce meaningfully different map layouts or terrain distributions
+- generated geography still respects the engine's current need for legible routes, region ownership, and stable simulation startup
+
+Do not touch:
+
+- shapely border or polygon work
+- territorial ownership geometry
+- pygame or live interactive map controls
+- broad climate or economy rewrites beyond what the geography generator strictly needs
+
+Deliverables:
+
+- `noise` dependency
+- minimal procedural geography generator replacing the current fixed map shuffle at the approved seam
+- focused deterministic geography regressions
+
+## Phase 15: Territorial Borders And Geometry
+
+Status: Complete
+
+Scope:
+
+- `fantasy_engine/world/` geometry helpers
+- static map export layers that need border shapes
+- focused tests only
+
+Success criteria:
+
+- civilizations can expose explicit border or territory geometry instead of only point-based region ownership
+- `shapely` is used only where real geometry operations are required, such as clipping, merging, adjacency cleanup, or route intersection logic
+- territory visualization remains compatible with the existing static export path before any interactive runtime is considered
+
+Do not touch:
+
+- pygame runtime work
+- broad political simulation rewrites unrelated to geometry
+- speculative province or settlement micro-systems
+
+Deliverables:
+
+- `shapely` dependency
+- explicit territory or border geometry surface
+- focused border-geometry regressions
+
+## Phase 16: Static Terrain Surface And Cartography
+
+Status: Approved
+
+Scope:
+
+- `fantasy_engine/world/map.py`
+- `fantasy_engine/world/territories.py` only if terrain-to-territory alignment needs a narrow geometry hook
+- `fantasy_engine/visual/world_map.py`
+- focused tests only
+
+Success criteria:
+
+- the static export can render a deterministic terrain surface that reads more like real geography than abstract colored polygons alone
+- the same seed produces the same terrain surface while different seeds can materially change coastlines, landmass shape, terrain bands, or water distribution
+- the export clearly separates land, sea, and at least one higher-relief terrain class such as hills or mountains
+- existing territory polygons, labels, and route overlays remain compatible with the new terrain surface instead of being replaced by it
+
+Do not touch:
+
+- interactive runtime work
+- broad political simulation rewrites
+- province or settlement micro-systems
+- hydrology, weather, or erosion simulation beyond the smallest cartography-facing slice
+
+Deliverables:
+
+- deterministic land and water surface generation for the static exporter
+- coastline and terrain-band rendering layered under existing political geometry
+- focused terrain-surface regressions
+
+## Phase 17: Interactive Map Runtime
+
+Status: Deferred
+
+Scope:
+
+- a separate interactive map runtime layer
+- controller integration only where needed to observe existing simulation state
+- focused tests only
+
+Success criteria:
+
+- `pygame-ce` powers an interactive observation surface rather than replacing the deterministic simulation core
+- the runtime can inspect geography, routes, and later territory state without breaking the existing Rich watcher or static export path
+- input, camera, and rendering concerns stay outside the simulation core and snapshot construction layers
+
+Do not touch:
+
+- core simulation ownership rules beyond what the interactive observer needs to read
+- broad UI duplication of every existing Rich panel
+- speculative gameplay systems unrelated to observation
+
+Deliverables:
+
+- `pygame-ce` dependency
+- separate interactive map observer runtime
+- focused runtime interaction regressions
+
 ## Current Immediate Task Order
 
-Phase 12 is complete.
+Phase 15 is complete.
 
-No next phase is approved yet.
+Next approved phase: Phase 16 - Static Terrain Surface And Cartography
 
 Follow these next, in order:
 
-1. Define a fresh post-Phase-12 roadmap target before making further source changes.
-2. Preserve the active kin, household, hero, profession, and holy-war slices as the current stopping point.
-3. Do not widen into unrelated world systems until the next phase is explicitly approved.
+1. Add one focused regression proving the same seed yields the same terrain-surface signature while different seeds can materially change land, water, or relief layout.
+2. Add the smallest static terrain layer under the current territory export: land and water mask first, then coastline and basic relief banding.
+3. Keep current territory polygons, routes, and labels as overlay layers rather than rewriting the political map surface.
+4. Stop and report before widening into interactive runtime work.
 
-These tasks matter because the roadmap now includes the approved personal, household, hero, profession, and confessional-war slices. The next gap is choosing a fresh target instead of widening the engine without a new phase boundary.
+These tasks matter because the engine now has deterministic procedural geography and static political territories, but it still does not render a terrain surface that reads like real land and water. The next gap is cartographic terrain rendering, not interactive runtime work.
 
 ## Stop Conditions
 
