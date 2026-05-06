@@ -17,6 +17,7 @@ from fantasy_engine.core.engine import (
 )
 from fantasy_engine.core.events import HistoryArchive, HistoryEvent
 from fantasy_engine.core.rng import SeededRNG
+from fantasy_engine.legends import LegendEntry, LegendsReader
 from fantasy_engine.characters.names import get_default_name_registry
 from fantasy_engine.systems.characters import CharacterSystem
 from fantasy_engine.systems.civilization import Civilization
@@ -42,6 +43,7 @@ class World:
         self.season_index = 0
         self.total_ticks = 0
         self.history = HistoryArchive()
+        self.legends_reader = LegendsReader(self.history)
         self.map_regions = WorldMap.generate(self.rng, num_civilizations)
         self.trade_routes = WorldMap.build_trade_routes(self.map_regions, self.rng)
         self.pending_shipments: list[Shipment] = []
@@ -72,7 +74,7 @@ class World:
                     civilization=civilization.name,
                     details=(
                         f"{civilization.name} took root in {civilization.region.name} under {civilization.ruler.name}, building its fortunes around "
-                        f"fertility {civilization.region.fertility:.2f} and route cost {civilization.route_cost:.2f}."
+                        f"{civilization.region.terrain.name.lower()} ground, fertility {civilization.region.fertility:.2f}, and route cost {civilization.route_cost:.2f}."
                     ),
                     severity="major",
                 )
@@ -135,6 +137,12 @@ class World:
         for _ in range(years):
             self.advance_year()
         return self.history.events
+
+    def recent_legends(self, limit: int = 3) -> list[LegendEntry]:
+        return self.legends_reader.recent_legends(limit=limit)
+
+    def recent_legend_summaries(self, limit: int = 3) -> list[str]:
+        return [legend.summary for legend in self.recent_legends(limit=limit)]
 
     def get_civilization(self, name: str) -> Civilization | None:
         for civilization in self.civilizations:

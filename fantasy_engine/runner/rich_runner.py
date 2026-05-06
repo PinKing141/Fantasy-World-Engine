@@ -269,4 +269,7 @@ def run_with_rich(
                 rule_style="bold cyan",
             )
         )
-        renderer.render_run_end(controller.world.history.cause_effect_pairs()[-8:])
+        renderer.render_run_end(
+            controller.world.history.cause_effect_pairs()[-8:],
+            controller.world.recent_legend_summaries(limit=3),
+        )

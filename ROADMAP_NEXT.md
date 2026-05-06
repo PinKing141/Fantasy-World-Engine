@@ -107,7 +107,7 @@ Examples of the wrong kind of hardening later:
 
 ## Phase 2A: Stabilize Needs And Route Disruption
 
-Status: Active next phase
+Status: Complete
 
 Scope:
 
@@ -148,6 +148,8 @@ Deliverables:
 
 ## Phase 2B: Shortage Cascade Into Politics
 
+Status: Complete
+
 Scope:
 
 - `fantasy_engine/systems/society.py`
@@ -179,6 +181,8 @@ Deliverables:
 
 ## Phase 3: Memory As Decision Input
 
+Status: Complete
+
 Scope:
 
 - `fantasy_engine/core/events.py`
@@ -208,6 +212,8 @@ Deliverables:
 
 ## Phase 4: Cross-Civilization Faction Interaction
 
+Status: Complete
+
 Scope:
 
 - `fantasy_engine/systems/factions.py`
@@ -235,6 +241,8 @@ Deliverables:
 
 ## Phase 5: Legends Rebuild
 
+Status: Complete
+
 Scope:
 
 - new active legends module under `fantasy_engine/`
@@ -260,6 +268,8 @@ Deliverables:
 
 ## Phase 6: Physical Terrain Properties
 
+Status: Complete
+
 Scope:
 
 - `fantasy_engine/world/map.py`
@@ -281,16 +291,48 @@ Deliverables:
 - integration with economy and war movement
 - focused terrain regressions
 
+## Phase 7: Faith Formation And Schism Pressure
+
+Scope:
+
+- `fantasy_engine/systems/civilization.py`
+- `fantasy_engine/systems/society.py`
+- `fantasy_engine/systems/characters.py`
+- `fantasy_engine/world/world.py` if needed for initialization only
+- event types and focused tests
+
+Success criteria:
+
+- civilizations hold an explicit active faith identity in the modular engine
+- belief pressure can diverge from court and ruler legitimacy instead of remaining invisible flavor
+- at least one regression proves a material crisis can push a civilization toward faith instability or schism pressure
+- at least one regression proves the same present-day civilization can react differently because court or dynastic faith alignment differs
+
+Do not touch:
+
+- heroes or profession systems
+- holy war expansion
+- broad legends prose upgrades
+- full culture-religion rewrite beyond the smallest active faith slice
+
+Deliverables:
+
+- explicit faith identity and alignment state
+- legitimacy and social pressure hooks for belief instability
+- focused schism-pressure regressions
+
 ## Current Immediate Task Order
+
+Next approved phase: Phase 7 - Faith Formation And Schism Pressure
 
 Follow these next, in order:
 
-1. Add explicit route disruption events.
-2. Add tests for severed, contested, and reopened routes.
-3. Validate peace reopening behavior.
-4. Stop and report before moving into deeper shortage cascade work.
+1. Add one focused regression proving a concrete pressure path can push an otherwise stable civilization into faith instability or schism pressure.
+2. Add the smallest explicit faith state to the modular civilization layer without importing a full religion subsystem.
+3. Connect that faith state to legitimacy, ruler or court alignment, and social pressure so belief fracture can become a visible causal factor.
+4. Stop and report before widening into holy wars, hero units, or broad narrative rewrite.
 
-These tasks matter because they improve causal legibility: they make it possible to trace how a war actually damaged movement, supply, and eventually political life.
+These tasks matter because the roadmap already promises faith and schism as part of meaningful history. The next gap is making belief a live source of pressure instead of leaving dynasties and crises to operate without a religious layer.
 
 ## Stop Conditions
 

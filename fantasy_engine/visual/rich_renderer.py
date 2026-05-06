@@ -16,7 +16,7 @@ class DashboardRenderer(Protocol):
 
     def render_year_close(self, *, year: int, snapshot: DashboardSnapshot) -> None: ...
 
-    def render_run_end(self, cause_effect_pairs: Sequence[tuple[str, str]]) -> None: ...
+    def render_run_end(self, cause_effect_pairs: Sequence[tuple[str, str]], legends: Sequence[str] = ()) -> None: ...
 
 
 class RichDashboardRenderer:
@@ -30,13 +30,15 @@ class RichDashboardRenderer:
     def render_year_close(self, *, year: int, snapshot: DashboardSnapshot) -> None:
         self.console.print(self.compose_frame(title=f"Year {year} close", snapshot=snapshot, rule_style="bold green"))
 
-    def render_run_end(self, cause_effect_pairs: Sequence[tuple[str, str]]) -> None:
+    def render_run_end(self, cause_effect_pairs: Sequence[tuple[str, str]], legends: Sequence[str] = ()) -> None:
         table = Table(title="Recent Cause-Effect Links", show_header=True, header_style="bold yellow")
         table.add_column("Cause")
         table.add_column("Effect")
         for source_id, target_id in cause_effect_pairs:
             table.add_row(source_id, target_id)
         self.console.print(table)
+        if legends:
+            self.console.print(Panel("\n".join(legends), title="Legends", border_style="cyan"))
 
     def compose_frame(
         self,

@@ -55,9 +55,18 @@ class FactionSystem:
                     )
                 )
 
+            self._seek_foreign_backing(world, civilization, context, leading_faction, highest_pressure)
+
+            foreign_coup_support = self._foreign_coup_support(
+                world,
+                civilization,
+                faction=leading_faction,
+                current_year=context.year,
+            )
+
             if (
                 civilization.coup_cooldown == 0
-                and highest_pressure + self._coup_support(leading_faction, civilization) >= 78.0
+                and highest_pressure + self._coup_support(leading_faction, civilization) + foreign_coup_support >= 78.0
                 and civilization.stability <= 32.0
                 and civilization.legitimacy <= 38.0
                 and leading_faction.leader is not civilization.ruler
@@ -67,7 +76,7 @@ class FactionSystem:
                     civilization,
                     context,
                     leading_faction,
-                    highest_pressure + self._coup_support(leading_faction, civilization),
+                    highest_pressure + self._coup_support(leading_faction, civilization) + foreign_coup_support,
                 )
 
     def _calculate_pressure(self, civilization: "Civilization", faction: "Faction") -> float:
@@ -93,6 +102,113 @@ class FactionSystem:
 
     def _coup_support(self, faction: "Faction", civilization: "Civilization") -> float:
         return self._need_pressure(faction) * 0.22 + civilization.ruler.needs.esteem * 0.05 + civilization.ruler.needs.belonging * 0.04
+
+    def _foreign_coup_support(
+        self,
+        world: FactionWorld,
+        civilization: "Civilization",
+        *,
+        faction: "Faction",
+        current_year: int,
+    ) -> float:
+        backing = self._recent_foreign_backing(world, civilization, faction=faction, current_year=current_year)
+        if backing is None:
+            return 0.0
+
+        pressure = float(backing.data.get("pressure", 0.0))
+        hostility = max(0.0, -civilization.relation_with(backing.other_civilization or ""))
+        agenda_bias = 1.15 if faction.name == "Military" else 1.0 if faction.name == "Nobility" else 0.45
+        return (8.0 + pressure * 0.08 + hostility * 0.12) * agenda_bias
+
+    def _recent_foreign_backing(
+        self,
+        world: FactionWorld,
+        civilization: "Civilization",
+        *,
+        faction: "Faction",
+        current_year: int,
+    ) -> HistoryEvent | None:
+        for event in reversed(world.history.get_recent_events(civilization.name, "foreign_backing", years_back=1, current_year=current_year)):
+            if event.data.get("faction") == faction.name:
+                return event
+        return None
+
+    def _seek_foreign_backing(
+        self,
+        world: FactionWorld,
+        civilization: "Civilization",
+        context: TickContext,
+        faction: "Faction",
+        pressure: float,
+    ) -> None:
+        if pressure < 58.0:
+            return
+        if civilization.stability > 45.0 and civilization.legitimacy > 45.0 and civilization.unrest < 28.0:
+            return
+
+        recent_backing = world.history.get_recent_events(civilization.name, "foreign_backing", years_back=1, current_year=context.year)
+        if recent_backing:
+            return
+
+        supporter = None
+        best_score = 0.0
+        for route in world.routes_for(civilization.name):
+            if route.state == "severed":
+                continue
+            candidate_name = world.route_partner_name(civilization.name, route)
+            if candidate_name is None:
+                continue
+            candidate = world.get_civilization(candidate_name)
+            if candidate is None or candidate.collapsed:
+                continue
+            if candidate.name in civilization.active_wars:
+                continue
+
+            hostility = max(0.0, -civilization.relation_with(candidate.name)) + max(0.0, -candidate.relation_with(civilization.name)) * 0.8
+            if hostility < 10.0:
+                continue
+
+            agenda_fit = 8.0 if faction.name == "Military" else 5.0 if faction.name == "Nobility" else 2.0
+            score = (
+                hostility
+                + max(0.0, candidate.force_projection() - civilization.force_projection()) * 0.08
+                + pressure * 0.15
+                + faction.influence * 12.0
+                + agenda_fit
+                + route.effective_capacity * 0.5
+                - route.distance
+                - route.effective_risk * 12.0
+            )
+            if score > best_score:
+                best_score = score
+                supporter = candidate
+
+        if supporter is None or best_score < 24.0:
+            return
+
+        world.history.record_event(
+            HistoryEvent(
+                year=context.year,
+                season=context.season,
+                event_type="foreign_backing",
+                civilization=civilization.name,
+                other_civilization=supporter.name,
+                details=(
+                    f"{faction.leader.name} opened covert contact with {supporter.name}, inviting foreign backing for the "
+                    f"{faction.name.lower()} while {civilization.name}'s court faltered."
+                ),
+                severity="major",
+                data={
+                    "faction": faction.name,
+                    "leader": faction.leader.name,
+                    "leader_id": faction.leader.agent_id,
+                    "pressure": round(pressure, 1),
+                    "supporter": supporter.name,
+                    "supporter_ruler": supporter.ruler.name,
+                    "supporter_ruler_id": supporter.ruler.agent_id,
+                },
+            )
+        )
 
     def _attempt_coup(
         self,
@@ -133,25 +249,42 @@ class FactionSystem:
         civilization.coup_cooldown = 6
         civilization.recovery_window = 5
 
+        foreign_backing = self._recent_foreign_backing(world, civilization, faction=faction, current_year=context.year)
+
+        details = (
+            f"{new_ruler.name} led the {faction.name.lower()} in overthrowing {old_ruler.name}. "
+            f"The new regime promised emergency grain relief and tighter control of the court."
+        )
+        if foreign_backing is not None and foreign_backing.other_civilization:
+            details = (
+                f"{new_ruler.name} led the {faction.name.lower()} in overthrowing {old_ruler.name} after covert backing from "
+                f"{foreign_backing.other_civilization} stiffened the faction's resolve. The new regime promised emergency grain relief "
+                f"and tighter control of the court."
+            )
+
+        event_data = {
+            "faction": faction.name,
+            "pressure": round(pressure, 1),
+            "new_ruler": new_ruler.name,
+            "new_ruler_id": new_ruler.agent_id,
+            "new_ruler_dynasty": new_ruler.dynasty_name,
+            "old_ruler": old_ruler.name,
+            "old_ruler_id": old_ruler.agent_id,
+            "old_ruler_dynasty": old_ruler.dynasty_name,
+        }
+        if foreign_backing is not None and foreign_backing.other_civilization:
+            event_data["supporter"] = foreign_backing.other_civilization
+            event_data["supporting_ruler"] = foreign_backing.data.get("supporter_ruler", "")
+
         world.history.record_event(
             HistoryEvent(
                 year=context.year,
                 season=context.season,
                 event_type="faction_coup",
                 civilization=civilization.name,
-                details=(
-                    f"{new_ruler.name} led the {faction.name.lower()} in overthrowing {old_ruler.name}. "
-                    f"The new regime promised emergency grain relief and tighter control of the court."
-                ),
+                details=details,
                 severity="catastrophic",
-                data={
-                    "faction": faction.name,
-                    "pressure": round(pressure, 1),
-                    "new_ruler": new_ruler.name,
-                    "new_ruler_id": new_ruler.agent_id,
-                    "old_ruler": old_ruler.name,
-                    "old_ruler_id": old_ruler.agent_id,
-                },
+                data=event_data,
             )
         )
 

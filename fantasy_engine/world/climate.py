@@ -21,8 +21,8 @@ class ClimateSystem:
             region = civilization.region
             weather_shift = world.rng.uniform(0.88, 1.12)
             rainfall_modifier = region.rainfall * weather_shift
-            harvest_modifier = rainfall_modifier * region.fertility
-            spoilage_modifier = 1.0 + (region.route_cost - 1.0) * 0.12
+            harvest_modifier = rainfall_modifier * region.harvest_potential
+            spoilage_modifier = 1.0 + (region.route_cost - 1.0) * 0.12 + max(0.0, region.terrain.exposure - 1.0) * 0.10
             consumption_modifier = 1.0
 
             if context.season == "winter":

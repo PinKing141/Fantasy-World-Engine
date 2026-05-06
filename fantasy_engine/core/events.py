@@ -97,14 +97,90 @@ class HistoryArchive:
                 self._cause_effect.append((event.caused_by, event.event_id))
             return
 
+        if event.event_type == "food_shortage":
+            severed_route = None
+            contested_route = None
+            for candidate in reversed(self.get_recent_events(years_back=1, current_year=event.year)):
+                if candidate.event_type not in {"route_severed", "route_contested"}:
+                    continue
+                if event.civilization not in {candidate.civilization, candidate.other_civilization}:
+                    continue
+                if candidate.event_type == "route_severed":
+                    severed_route = candidate
+                    break
+                if contested_route is None:
+                    contested_route = candidate
+            disruption = severed_route or contested_route
+            if disruption:
+                event.caused_by = disruption.event_id
+                self._cause_effect.append((event.caused_by, event.event_id))
+            return
+
+        if event.event_type == "faction_pressure":
+            for predecessor_type in ("trade_chokepoint", "court_hoarding", "military_rationing", "unrest", "food_shortage"):
+                predecessors = self.get_recent_events(
+                    event.civilization,
+                    predecessor_type,
+                    years_back=2,
+                    current_year=event.year,
+                )
+                if predecessors:
+                    event.caused_by = predecessors[-1].event_id
+                    self._cause_effect.append((event.caused_by, event.event_id))
+                    return
+            return
+
+        if event.event_type == "foreign_backing":
+            pressures = self.get_recent_events(event.civilization, "faction_pressure", years_back=1, current_year=event.year)
+            if pressures:
+                event.caused_by = pressures[-1].event_id
+                self._cause_effect.append((event.caused_by, event.event_id))
+            return
+
         if event.event_type == "faction_coup":
+            foreign_backing = self.get_recent_events(event.civilization, "foreign_backing", years_back=1, current_year=event.year)
+            if foreign_backing:
+                event.caused_by = foreign_backing[-1].event_id
+                self._cause_effect.append((event.caused_by, event.event_id))
+                return
+            pressures = self.get_recent_events(event.civilization, "faction_pressure", years_back=2, current_year=event.year)
+            if pressures:
+                event.caused_by = pressures[-1].event_id
+                self._cause_effect.append((event.caused_by, event.event_id))
+                return
             unrest = self.get_recent_events(event.civilization, "unrest", years_back=2, current_year=event.year)
             if unrest:
                 event.caused_by = unrest[-1].event_id
                 self._cause_effect.append((event.caused_by, event.event_id))
             return
 
+        if event.event_type == "defection":
+            for predecessor_type in ("court_hoarding", "trade_chokepoint", "military_rationing", "unrest", "food_shortage"):
+                predecessors = self.get_recent_events(
+                    event.civilization,
+                    predecessor_type,
+                    years_back=2,
+                    current_year=event.year,
+                )
+                if predecessors:
+                    event.caused_by = predecessors[-1].event_id
+                    self._cause_effect.append((event.caused_by, event.event_id))
+                    return
+            return
+
         if event.event_type == "war_declaration":
+            if event.other_civilization:
+                foreign_backing = self.get_recent_pair_events(
+                    event.civilization,
+                    event.other_civilization,
+                    event_types={"foreign_backing"},
+                    years_back=2,
+                    current_year=event.year,
+                )
+                if foreign_backing:
+                    event.caused_by = foreign_backing[-1].event_id
+                    self._cause_effect.append((event.caused_by, event.event_id))
+                    return
             unrest = self.get_recent_events(event.civilization, "unrest", years_back=2, current_year=event.year)
             if unrest:
                 event.caused_by = unrest[-1].event_id
@@ -192,6 +268,14 @@ class HistoryArchive:
 
     def recent(self, limit: int = 10) -> list[HistoryEvent]:
         return self.events[-limit:]
+
+    def event_by_id(self, event_id: str | None) -> HistoryEvent | None:
+        if not event_id:
+            return None
+        for event in reversed(self.events):
+            if event.event_id == event_id:
+                return event
+        return None
 
     def cause_effect_pairs(self) -> list[tuple[str, str]]:
         return list(self._cause_effect)

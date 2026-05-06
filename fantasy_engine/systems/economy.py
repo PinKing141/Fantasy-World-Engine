@@ -42,7 +42,7 @@ class EconomySystem:
         civilization.grain_stores += max(0, yield_amount)
         civilization.last_harvest = max(0, yield_amount)
 
-        expected_harvest = int(civilization.farmland * civilization.region.fertility * seasonal_bias)
+        expected_harvest = int(civilization.farmland * civilization.region.harvest_potential * seasonal_bias)
         if expected_harvest > 0 and yield_amount < int(expected_harvest * 0.70):
             world.history.record_event(
                 HistoryEvent(
@@ -126,11 +126,12 @@ class EconomySystem:
             if surplus <= 0:
                 continue
             relation = civilization.relation_with(partner_name)
+            travel_cost = route.effective_travel_cost
             score = (
                 relation * 0.4
                 + surplus * 0.25
                 + route.effective_capacity * 0.30
-                - route.distance * 1.3
+                - travel_cost * 1.3
                 - route.effective_risk * 18.0
                 + partner.court.diplomat.empathy * 0.1
             )
@@ -146,7 +147,7 @@ class EconomySystem:
         if amount <= 0:
             return
 
-        cost_per_food = max(2, int(2 + route.distance * 0.6 + route.effective_risk * 10))
+        cost_per_food = max(2, int(2 + route.effective_travel_cost * 0.6 + route.effective_risk * 10))
         affordable = max(0, civilization.treasury // cost_per_food)
         if affordable == 0 and civilization.court.steward.competence >= 58.0:
             affordable = min(amount, 3)
@@ -202,7 +203,7 @@ class EconomySystem:
                 continue
 
             civilization.grain_stores -= shipment_amount
-            revenue = shipment_amount * max(1, int(1 + route.distance * 0.25))
+            revenue = shipment_amount * max(1, int(1 + route.effective_travel_cost * 0.25))
             civilization.treasury += revenue
             partner.treasury = max(0, partner.treasury - revenue)
             world.queue_shipment(

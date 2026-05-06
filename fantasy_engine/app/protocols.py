@@ -72,7 +72,7 @@ class DiplomacyWorld(HasCivilizations, HasHistory, HasRouteQueries, HasCivilizat
     pass
 
 
-class FactionWorld(HasCivilizations, HasHistory, HasRng, Protocol):
+class FactionWorld(HasCivilizations, HasHistory, HasRng, HasRouteQueries, HasCivilizationLookup, Protocol):
     pass
 
 

@@ -159,8 +159,10 @@ class CharacterSystem:
                     data={
                         "old_ruler": old_ruler.name,
                         "old_ruler_id": old_ruler.agent_id,
+                        "old_ruler_dynasty": old_ruler.dynasty_name,
                         "new_ruler": new_ruler.name,
                         "new_ruler_id": new_ruler.agent_id,
+                        "new_ruler_dynasty": new_ruler.dynasty_name,
                     },
                 )
             )

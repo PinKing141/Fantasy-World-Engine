@@ -36,8 +36,8 @@ class MilitarySystem:
             civ_b.active_wars.discard(civ_a.name)
             return
 
-        power_a, troops_a, supply_cost_a, arms_loss_a = self._campaign_power(civ_a, route.distance, world)
-        power_b, troops_b, supply_cost_b, arms_loss_b = self._campaign_power(civ_b, route.distance, world)
+        power_a, troops_a, supply_cost_a, arms_loss_a = self._campaign_power(civ_a, route, world)
+        power_b, troops_b, supply_cost_b, arms_loss_b = self._campaign_power(civ_b, route, world)
         if power_a >= power_b:
             winner, loser = civ_a, civ_b
             winning_power = power_a
@@ -96,8 +96,8 @@ class MilitarySystem:
                 civilization=winner.name,
                 other_civilization=loser.name,
                 details=(
-                    f"{winner.court.general.name} led {winning_troops} troops over the route to {loser.name}, consuming "
-                    f"{winning_supply_cost} supplies and seizing {seized_food} provisions after the battle."
+                    f"{winner.court.general.name} led {winning_troops} troops over the {route.terrain.name.lower()} to {loser.name}, "
+                    f"consuming {winning_supply_cost} supplies and seizing {seized_food} provisions after the battle."
                 ),
                 severity="major",
                 data={
@@ -160,14 +160,15 @@ class MilitarySystem:
             return True
         return False
 
-    def _campaign_power(self, civilization: "Civilization", route_distance: float, world: "World") -> tuple[float, int, int, int]:
+    def _campaign_power(self, civilization: "Civilization", route: object, world: "World") -> tuple[float, int, int, int]:
         base_troops = civilization.military.standing_forces + min(civilization.military.levy_pool // 4, max(60, civilization.population // 90))
         troops = max(80, base_troops)
-        supply_cost = max(6, int((troops / 55.0) * max(1.0, route_distance / 2.0)))
-        arms_loss = max(1, int(troops / 180))
+        supply_cost = max(6, int((troops / 55.0) * max(1.0, route.effective_travel_cost / 2.0)))
+        arms_loss = max(1, int((troops / 180) * max(1.0, route.terrain.exposure)))
         supply_ratio = min(1.1, max(0.35, civilization.military.supply_stockpile / max(1, supply_cost)))
         armed_ratio = min(1.05, max(0.40, civilization.military.weapons_stockpile / max(1, troops / 12)))
         command_ratio = (civilization.court.general.competence + civilization.ruler.authority) / 170.0
         fatigue_ratio = max(0.45, 1.0 - civilization.court.general.fatigue / 140.0)
-        power = troops * supply_ratio * armed_ratio * command_ratio * fatigue_ratio * world.rng.uniform(0.88, 1.12) / 16.0
+        terrain_ratio = max(0.70, 1.0 / (route.terrain.travel_difficulty * 0.65 + route.terrain.exposure * 0.20 + route.terrain.chokepoint * 0.15))
+        power = troops * supply_ratio * armed_ratio * command_ratio * fatigue_ratio * terrain_ratio * world.rng.uniform(0.88, 1.12) / 16.0
         return power, troops, supply_cost, arms_loss

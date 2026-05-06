@@ -673,6 +673,9 @@ class _LiveLoopWorld:
     def advance_season(self) -> SeasonStepResult:
         raise AssertionError("advance_season should not be called in this paused live-loop test")
 
+    def recent_legend_summaries(self, limit: int = 3) -> list[str]:
+        return []
+
 
 class _EmptyHistory:
     def cause_effect_pairs(self) -> list[tuple[str, str]]:

@@ -45,7 +45,7 @@ def run_demo(
     except KeyboardInterrupt:
         renderer.console.print("\nRun interrupted by user.")
 
-    renderer.render_run_end(world.history.cause_effect_pairs()[-8:])
+    renderer.render_run_end(world.history.cause_effect_pairs()[-8:], world.recent_legend_summaries(limit=3))
 
 
 def main() -> None:

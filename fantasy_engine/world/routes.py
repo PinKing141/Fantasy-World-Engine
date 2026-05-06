@@ -4,12 +4,21 @@ from dataclasses import dataclass
 
 
 @dataclass(slots=True)
+class RouteTerrain:
+    name: str
+    travel_difficulty: float
+    exposure: float
+    chokepoint: float
+
+
+@dataclass(slots=True)
 class TradeRoute:
     region_a: str
     region_b: str
     distance: float
     capacity: int
     risk: float
+    terrain: RouteTerrain
     state: str = "open"
     disrupted_by: tuple[str, ...] = ()
 
@@ -41,6 +50,14 @@ class TradeRoute:
         if self.state == "contested":
             return min(0.95, self.risk + 0.18)
         return self.risk
+
+    @property
+    def effective_travel_cost(self) -> float:
+        if self.state == "severed":
+            return self.distance * self.terrain.travel_difficulty * 2.0
+        if self.state == "contested":
+            return self.distance * self.terrain.travel_difficulty * 1.35
+        return self.distance * self.terrain.travel_difficulty
 
     def mark_open(self) -> None:
         self.state = "open"
