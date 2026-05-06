@@ -1,0 +1,201 @@
+{
+  "default_culture": "frontier",
+  "cultures": {
+    "frontier": {
+      "structure": "family",
+      "male": [
+        "Adrian", "Aelred", "Alan", "Albert", "Aldric", "Anselm", "Baldwin", "Bartholomew", "Benedict", "Bernard",
+        "Berengar", "Bertram", "Charles", "Christopher", "Conrad", "Damian", "David", "Edmund", "Edward", "Edwin",
+        "Elias", "Emeric", "Everard", "Felix", "Francis", "Frederick", "Geoffrey", "Gerard", "Gilbert", "Giles",
+        "Godfrey", "Gregory", "Guy", "Hadrian", "Henry", "Hugh", "Humphrey", "Ivo", "James", "Jerome",
+        "John", "Jonas", "Julian", "Lambert", "Laurence", "Leo", "Leonard", "Louis", "Lucas", "Martin",
+        "Matthew", "Miles", "Nicholas", "Odo", "Oliver", "Oswin", "Pascal", "Peter", "Philip", "Quentin",
+        "Ralph", "Raymond", "Reynold", "Richard", "Robert", "Roger", "Roland", "Samson", "Simon", "Stephen",
+        "Theobald", "Theodore", "Thomas", "Tristan", "Ulric", "Urban", "Victor", "Vincent", "Walter", "William",
+        "Yves", "Zachary"
+      ],
+      "female": [
+        "Adelaide", "Adela", "Agnes", "Alice", "Aline", "Amabel", "Anastasia", "Anne", "Aveline", "Beatrice",
+        "Bertha", "Blanche", "Brigida", "Cecilia", "Clarice", "Constance", "Cristina", "Dorothy", "Edith", "Eleanor",
+        "Elisabeth", "Ellen", "Emma", "Euphemia", "Eva", "Felicia", "Florence", "Frances", "Gisela", "Grace",
+        "Hawise", "Helen", "Hedwig", "Ida", "Isabel", "Isolde", "Jane", "Joan", "Joanna", "Judith",
+        "Juliana", "Katherine", "Letitia", "Lucia", "Luciana", "Magdalen", "Margaret", "Margery", "Maria", "Martha",
+        "Matilda", "Maud", "Melisende", "Millicent", "Odeline", "Odilia", "Olive", "Petronilla", "Philippa", "Rachel",
+        "Rebecca", "Richenda", "Rohese", "Rosamund", "Sabina", "Sara", "Sibyl", "Sophia", "Susanna", "Sybilla",
+        "Theodora", "Ursula", "Violante", "Winifred", "Ysabel", "Albreda", "Aubrey", "Claricia", "Elicia", "Helwise",
+        "Mabel", "Peronelle"
+      ],
+      "family": [
+        "Arden", "Beaumont", "Berkeley", "Clifford", "Courtenay", "Darcy", "de Vere", "FitzAlan", "Grey", "Hastings",
+        "Lancaster", "Montfort", "Mortimer", "Neville", "Percy", "Plantagenet", "Stanley", "Talbot", "Tudor", "Wake",
+        "Warenne", "Beauchamp", "Braose", "Ferrers"
+      ]
+    },
+    "northlands": {
+      "structure": "patronymic",
+      "patronymic_style": "suffix",
+      "patronymic_suffixes": {
+        "male": "son",
+        "female": "dottir"
+      },
+      "male": [
+        "Arne", "Asbjorn", "Asgeir", "Aslak", "Asmund", "Audun", "Bard", "Bjarni", "Bjarke", "Bjorn",
+        "Brandr", "Dag", "Egil", "Einar", "Eirik", "Erlend", "Erling", "Eyvind", "Finn", "Frode",
+        "Gaut", "Geir", "Gisli", "Gudmund", "Gunnar", "Halfdan", "Hallvard", "Hakon", "Harald", "Heming",
+        "Herleif", "Hjalmar", "Hoskuld", "Hroald", "Hroar", "Ivar", "Ingvar", "Jarl", "Jorund", "Ketil",
+        "Kettil", "Kjell", "Knut", "Kolbein", "Leif", "Magnus", "Nikulas", "Njall", "Odd", "Olaf",
+        "Orm", "Orvar", "Ragnar", "Rolf", "Roar", "Runar", "Sigbjorn", "Sigfred", "Sigurd", "Skuli",
+        "Snorri", "Stein", "Sten", "Stig", "Styrmir", "Svein", "Thorarin", "Thorbjorn", "Thorir", "Thorleif",
+        "Thorolf", "Thorstein", "Thorvald", "Toke", "Trygve", "Ulf", "Valdemar", "Vegard", "Vidar", "Viggo",
+        "Yngvar", "Asger"
+      ],
+      "female": [
+        "Aasa", "Ase", "Arnora", "Aslaug", "Asta", "Astrid", "Bera", "Bergljot", "Bodil", "Brynhild",
+        "Dagny", "Dalla", "Drifa", "Eilin", "Eir", "Eydis", "Freya", "Freydis", "Frida", "Geira",
+        "Gerd", "Groa", "Gudrid", "Gudrun", "Gunnhild", "Gunvor", "Hallgerd", "Helga", "Herborg", "Herdis",
+        "Hild", "Hilda", "Hlif", "Inga", "Ingibjorg", "Ingrid", "Jodis", "Jofrid", "Jorid", "Jorunn",
+        "Kara", "Kolfinna", "Kristina", "Liv", "Malmfrid", "Margret", "Oddny", "Ragna", "Ragnfrid", "Ragnhild",
+        "Rannveig", "Runa", "Sigrid", "Signy", "Sigrun", "Solveig", "Snaefrid", "Steinunn", "Svanhild", "Thora",
+        "Thorbjorg", "Thorgerd", "Thorhild", "Thyra", "Tora", "Torfrid", "Torunn", "Unn", "Ulvhild", "Valborg",
+        "Vebjorg", "Vigdis", "Ylva", "Yrsa", "Auda", "Borghild", "Eydna", "Gunhild", "Jorid", "Rannlaug",
+        "Signy", "Thordis"
+      ],
+      "family": [
+        "Arne", "Asbjorn", "Bjorn", "Eirik", "Gunnar", "Hakon", "Harald", "Ivar", "Knut", "Leif",
+        "Magnus", "Olaf", "Ragnar", "Sigurd", "Sten", "Svein", "Thor", "Thorvald", "Trygve", "Ulf"
+      ]
+    },
+    "imperial": {
+      "structure": "family",
+      "family_name_first": false,
+      "male": [
+        "Aelius", "Aemilius", "Agrippa", "Amandus", "Ambrosius", "Antonius", "Appius", "Augustus", "Aurelian", "Aurelius",
+        "Basilius", "Cassian", "Cassius", "Claudius", "Constantinus", "Cornelius", "Crispinus", "Decimus", "Diocles", "Domitian",
+        "Drusus", "Emilian", "Faustus", "Fabius", "Felix", "Flavian", "Florian", "Gaius", "Germanus", "Gratian",
+        "Hadrian", "Horatius", "Ignatius", "Jovian", "Julian", "Julius", "Justinian", "Lactantius", "Laurentius", "Longinus",
+        "Lucan", "Lucian", "Lucius", "Magnus", "Marcellinus", "Marcellus", "Marcus", "Maximian", "Maximus", "Nero",
+        "Nerva", "Octavian", "Olympius", "Orestes", "Paulus", "Petronius", "Philippus", "Priscus", "Quintilian", "Quintus",
+        "Remigius", "Remus", "Rufinus", "Sebastianus", "Septimus", "Severin", "Severus", "Silvanus", "Tacitus", "Tertius",
+        "Theodosius", "Tiberius", "Titus", "Trajan", "Urbanus", "Valens", "Valerian", "Valentinian", "Varro", "Victorinus",
+        "Vincentius", "Vitus"
+      ],
+      "female": [
+        "Aelia", "Aemilia", "Agrippina", "Albina", "Anastasia", "Antonia", "Antonina", "Appia", "Artemia", "Aurelia",
+        "Aureliana", "Balbina", "Blandina", "Caecilia", "Calpurnia", "Camilla", "Cassia", "Celerina", "Claudia", "Constantia",
+        "Constantina", "Cornelia", "Cypriana", "Decima", "Domitia", "Domnica", "Drusilla", "Eudoxia", "Faustina", "Felicitas",
+        "Flavia", "Florentia", "Fulvia", "Galeria", "Gratiana", "Hadriana", "Helena", "Herminia", "Honoria", "Honesta",
+        "Irene", "Julia", "Juliana", "Julitta", "Justina", "Laurentia", "Lavinia", "Livia", "Lucilla", "Lucina",
+        "Marcella", "Marcia", "Marina", "Martina", "Maxima", "Octavia", "Paulina", "Petronilla", "Placidia", "Prisca",
+        "Priscilla", "Pulcheria", "Regina", "Romana", "Rufina", "Sabina", "Serena", "Severa", "Tatiana", "Theodora",
+        "Tullia", "Urbania", "Valeria", "Veronica", "Vibia", "Vitalia", "Vitellia", "Aurelia", "Clara", "Domitilla",
+        "Fausta", "Justa"
+      ],
+      "family": [
+        "Aemilius", "Antonius", "Aurelius", "Cassius", "Claudius", "Cornelius", "Domitius", "Fabius", "Flavius", "Julius",
+        "Licinius", "Marcellus", "Petronius", "Sergius", "Tullius", "Valerius", "Varro", "Vitellius"
+      ]
+    },
+    "desert": {
+      "structure": "patronymic",
+      "patronymic_style": "particle",
+      "patronymic_particles": {
+        "male": "ibn",
+        "female": "bint"
+      },
+      "male": [
+        "Abbas", "Abdallah", "Abd al-Rahman", "Adil", "Ahmad", "Ali", "Amir", "Ayyub", "Bashir", "Dawud",
+        "Faraj", "Farid", "Faysal", "Ghassan", "Habib", "Hadi", "Hafiz", "Hakim", "Hamid", "Harun",
+        "Hasan", "Husayn", "Ibrahim", "Idris", "Ilyas", "Imran", "Ishaq", "Ismail", "Jabir", "Jalal",
+        "Jalil", "Jamil", "Karim", "Khalaf", "Khalid", "Khalil", "Latif", "Luay", "Mahmud", "Majid",
+        "Malik", "Mansur", "Marwan", "Masud", "Mazyad", "Musa", "Nadir", "Nasir", "Nizam", "Nuh",
+        "Nuaym", "Omar", "Qasim", "Rafi", "Rafiq", "Rashid", "Saad", "Salih", "Salim", "Sami",
+        "Samir", "Sufyan", "Sulayman", "Talib", "Taqi", "Tariq", "Ubayd", "Umar", "Usama", "Walid",
+        "Yaqut", "Yasir", "Yasin", "Yusuf", "Zafar", "Zayd", "Ziyad", "Faruq", "Hamza", "Muawiya",
+        "Naeem", "Sultan"
+      ],
+      "female": [
+        "Aisha", "Aliya", "Amara", "Amina", "Amira", "Asma", "Atika", "Badia", "Basima", "Dalia",
+        "Durra", "Farah", "Farida", "Fariha", "Fatima", "Ghada", "Habiba", "Hafsa", "Halima", "Hanan",
+        "Hind", "Husna", "Ibtihaj", "Inas", "Inaya", "Jamila", "Jawhara", "Karima", "Kawthar", "Khadija",
+        "Khalisa", "Lamia", "Latifa", "Layla", "Lubna", "Lulwa", "Maha", "Mahin", "Malika", "Mariam",
+        "Maymuna", "Munira", "Nadia", "Nafisa", "Naima", "Najwa", "Nawal", "Nura", "Qadira", "Rabia",
+        "Rania", "Rayhana", "Ruqayya", "Sabah", "Safiya", "Sahar", "Sakina", "Salma", "Samira", "Sana",
+        "Shifa", "Shirin", "Soraya", "Suad", "Sumayya", "Tahira", "Thuraiya", "Warda", "Yasmin", "Yusra",
+        "Zahra", "Zainab", "Zarifa", "Alya", "Buthayna", "Kanza", "Lina", "Nisrin", "Rim", "Sawsan",
+        "Tahani", "Wardah"
+      ],
+      "family": [
+        "Abbasid", "Ayyubid", "Faruqi", "Hashimi", "Idrisi", "Khalidi", "Mansuri", "Qurashi", "Rashidi", "Saadi",
+        "Tamimi", "Yamani", "Zahiri", "Hariri", "Nasiri", "Zaydani"
+      ]
+    },
+    "highland": {
+      "structure": "clan",
+      "family_name_first": true,
+      "male": [
+        "Aedan", "Aidan", "Alasdair", "Alpin", "Aonghas", "Artair", "Artan", "Blair", "Bran", "Brodie",
+        "Cailean", "Callum", "Cairbre", "Cian", "Ciaran", "Coinneach", "Coll", "Comgall", "Conall", "Cormac",
+        "Donal", "Donnchadh", "Domhnall", "Douglas", "Duncan", "Eoghan", "Eoin", "Ewan", "Fergus", "Fiachra",
+        "Finlay", "Fingal", "Fintan", "Fionn", "Gavin", "Gillebride", "Gofraid", "Gregor", "Hamish", "Iain",
+        "Ian", "Innes", "Kenneth", "Kieran", "Lachlan", "Lennox", "Lorcan", "Malcolm", "Muireadhach", "Murdoch",
+        "Nechtan", "Niall", "Odran", "Padraig", "Patrick", "Ranald", "Ronan", "Rory", "Ruaidri", "Ruairi",
+        "Seamus", "Senan", "Somerled", "Tadhg", "Tavish", "Tomas", "Torcall", "Tormod", "Torquil", "Uilleam",
+        "Aongus", "Caolan", "Conchobhar", "Diarmid", "Eimhin", "Fergusan", "Gillies", "Maelduin", "Muiris", "Ruaridh",
+        "Torcallan", "Tuathal"
+      ],
+      "female": [
+        "Aifric", "Aileen", "Ailis", "Ailsa", "Aine", "Beathag", "Beitris", "Bethoc", "Caitlin", "Cairistiona",
+        "Catriona", "Dearbhla", "Deirdre", "Eabha", "Ealasaid", "Eibhlin", "Eilidh", "Eimhear", "Eithne", "Elspeth",
+        "Eona", "Fenella", "Fiona", "Fionnuala", "Gormlaith", "Greer", "Iona", "Isabel", "Isla", "Kenna",
+        "Lasairfhiona", "Lilias", "Mairghread", "Mairead", "Mairi", "Mairiota", "Marsaili", "Mhairi", "Moira", "Mor",
+        "Morag", "Muirgel", "Muireall", "Muirne", "Murna", "Nessa", "Niamh", "Oighrig", "Oonagh", "Orlaith",
+        "Peigi", "Raghnailt", "Rhona", "Roisin", "Rona", "Sadhbh", "Seonaid", "Senga", "Shona", "Sile",
+        "Sorcha", "Teagan", "Treasa", "Una", "Aislinn", "Brid", "Ciara", "Doireann", "Ethna", "Grisel",
+        "Iseabail", "Mairin", "Muireann", "Neasa", "Rionach", "Sadb", "Tara", "Unai", "Bebhinn", "Eilis",
+        "Ena", "Riona"
+      ],
+      "clans": [
+        "Campbell", "Cameron", "Douglas", "Forbes", "Fraser", "Gordon", "Grant", "Kennedy", "Lamont", "Lennox",
+        "Macalister", "Macdonald", "Macdougall", "Macfarlane", "Macgregor", "Mackay", "Maclean", "Macleod", "Macnab", "Macneill",
+        "Murray", "Robertson", "Ross", "Sinclair", "Stewart", "Sutherland"
+      ]
+    },
+    "coastal": {
+      "structure": "epithet",
+      "male": [
+        "Adriano", "Aitor", "Alejandro", "Alessio", "Alvaro", "Amadeo", "Andres", "Antonio", "Basileios", "Bastian",
+        "Benedetto", "Bruno", "Cesare", "Cosimo", "Cristobal", "Damian", "Demetrios", "Diego", "Dionisio", "Dorian",
+        "Elias", "Emilios", "Enzo", "Esteban", "Fabian", "Federico", "Filippo", "Gabriel", "Gaspar", "Giorgio",
+        "Gregorio", "Hector", "Hernan", "Iago", "Ignacio", "Isandro", "Jacobo", "Javier", "Joaquin", "Jorge",
+        "Juan", "Kallistos", "Leandro", "Leon", "Lorenzo", "Luca", "Luciano", "Manuel", "Marco", "Mariano",
+        "Mateo", "Matias", "Miguel", "Nereo", "Niccolo", "Niko", "Nikolaos", "Octavio", "Oresti", "Oriol",
+        "Paolo", "Pasquale", "Pere", "Rafael", "Ramon", "Renato", "Rocco", "Rodrigo", "Salvador", "Sebastiano",
+        "Sergio", "Stefano", "Tadeo", "Teodoro", "Tomas", "Valerio", "Vasco", "Vicente", "Xabier", "Yannos",
+        "Zanobi", "Zorzi"
+      ],
+      "female": [
+        "Adriana", "Agata", "Alessandra", "Amalia", "Anais", "Angela", "Antonia", "Ariadna", "Beatriz", "Belen",
+        "Bianca", "Calista", "Camila", "Carina", "Catalina", "Celia", "Chiara", "Constanza", "Coralia", "Delfina",
+        "Despina", "Eleni", "Elisa", "Emilia", "Esmeralda", "Estela", "Evangelia", "Fabiana", "Filomena", "Gaia",
+        "Gabriela", "Graciela", "Helena", "Ines", "Ione", "Irene", "Isadora", "Isabella", "Jacinta", "Joaquina",
+        "Julieta", "Kalliope", "Leonor", "Lidia", "Liora", "Lucia", "Luciana", "Magdalena", "Marina", "Marisol",
+        "Mireia", "Mirella", "Nadia", "Nerina", "Noelia", "Odessa", "Paloma", "Pilar", "Rafaela", "Renata",
+        "Rosalia", "Sabina", "Selena", "Sofia", "Teresa", "Thais", "Thekla", "Valentina", "Vasiliki", "Veronica",
+        "Ximena", "Yolanda", "Zenaida", "Zoe", "Aurea", "Beata", "Corina", "Elvira", "Melina", "Teodora",
+        "Violeta", "Ysabel"
+      ],
+      "family": [
+        "Borgia", "Capello", "Colombo", "da Costa", "de Vega", "Ferraro", "Galanis", "Mendez", "Navarro", "Paredes",
+        "Ribeiro", "Salazar", "Santoro", "Ventura", "Vicario", "Zorzi"
+      ],
+      "epithets": {
+        "combat": ["Stormblade", "the Breaker", "Wavecleaver", "Sea-Wolf"],
+        "diplomacy": ["the Silver Voice", "the Calm Tide", "Harbormind"],
+        "learning": ["Starreader", "the Cartographer", "Lighthouse Sage"],
+        "nobility": ["the Velvet Sail", "Pearl Court", "the Azure Mantle"],
+        "faith": ["the Tidelit", "of the Lantern", "the Salt-Seer"],
+        "general": ["Windwalker", "the Far-Sailed", "of the Blue Wake"]
+      }
+    }
+  }
+}

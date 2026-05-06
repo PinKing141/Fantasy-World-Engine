@@ -1,0 +1,399 @@
+Fantasy Engine Pre Alpha 1
+
+import random
+import time
+from datetime import datetime
+import os
+import math
+import json
+from collections import defaultdict
+
+"""
+====================== CORE SYSTEMS ======================
+These classes handle the fundamental world simulation mechanics
+"""
+
+class WorldMap:
+    """Handles world geography and civilization placement"""
+    def __init__(self, width=40, height=20, seed=None):
+        self.width = width
+        self.height = height
+        self.seed = seed if seed is not None else datetime.now().timestamp()
+        self.rng = random.Random(self.seed)  # Dedicated RNG for this world
+        
+        # Initialize grid with plains ('.')
+        self.grid = [['.' for _ in range(width)] for _ in range(height)]
+        
+        # Terrain type definitions
+        self.terrain_types = {
+            '.': "Plains",
+            '^': "Mountains",
+            '~': "Rivers",
+            '*': "Forests",
+            '#': "Desert"
+        }
+        
+        # Civilization positions storage
+        self.civilization_locations = {}
+
+    def generate_geography(self):
+        """Generate basic terrain features using the seeded RNG"""
+        for y in range(self.height):
+            for x in range(self.width):
+                r = self.rng.random()
+                if r < 0.05:
+                    self.grid[y][x] = '^'  # 5% chance for mountains
+                elif r < 0.15:
+                    self.grid[y][x] = '*'  # 10% chance for forests
+                elif r < 0.2:
+                    self.grid[y][x] = '~'  # 5% chance for rivers
+                elif r < 0.25:
+                    self.grid[y][x] = '#'  # 5% chance for desert
+
+        # Generate rivers that flow downstream
+        for _ in range(self.rng.randint(3, 5)):  # 3-5 rivers
+            x, y = self.rng.randint(0, self.width-1), self.rng.randint(0, self.height-1)
+            length = self.rng.randint(5, 10)
+            for _ in range(length):
+                if 0 <= x < self.width and 0 <= y < self.height:
+                    self.grid[y][x] = '~'
+                    # River flows south and randomly east/west
+                    x += self.rng.choice([-1, 0, 1])
+                    y += 1
+
+    def place_civilization(self, civ):
+        """Find suitable location for a civilization"""
+        for _ in range(50):  # Try 50 random spots
+            x, y = self.rng.randint(0, self.width-1), self.rng.randint(0, self.height-1)
+            if self.grid[y][x] == '.':  # Prefer plains
+                # Check for nearby water
+                for dy in [-1, 0, 1]:
+                    for dx in [-1, 0, 1]:
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < self.width and 0 <= ny < self.height:
+                            if self.grid[ny][nx] == '~':  # Found water
+                                self.civilization_locations[civ.name] = (x, y)
+                                civ.map_position = (x, y)
+                                return True
+        return False
+
+    def display(self, civilizations):
+        """Print ASCII map of the world"""
+        print("\nWorld Map:")
+        for y in range(self.height):
+            row = []
+            for x in range(self.width):
+                # Check for civilizations first
+                for civ in civilizations:
+                    if (x, y) == civ.map_position:
+                        row.append(civ.name[0].upper())
+                        break
+                else:
+                    row.append(self.grid[y][x])
+            print("".join(row))
+        
+        print("\nLegend:")
+        print("Letters: Civilizations (first letter)")
+        for symbol, name in self.terrain_types.items():
+            print(f"{symbol}: {name}")
+
+    def to_dict(self):
+        """Convert WorldMap data to a dictionary for saving"""
+        return {
+            'width': self.width,
+            'height': self.height,
+            'seed': self.seed,
+            'grid': self.grid,
+            'civilization_locations': self.civilization_locations
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        """Create WorldMap from saved dictionary data"""
+        world_map = cls(width=data['width'], height=data['height'], seed=data['seed'])
+        world_map.grid = data['grid']
+        world_map.civilization_locations = data['civilization_locations']
+        return world_map
+
+class ClimateSystem:
+    """Handles seasonal changes and weather events"""
+    def __init__(self, rng=None):
+        self.season = "Spring"
+        self.temperature = 15  # Average temperature in °C
+        self.rainfall = 50     # Average rainfall in mm
+        self.rng = rng if rng is not None else random.Random()
+
+    def update(self):
+        """Progress through seasons"""
+        seasons = ["Spring", "Summer", "Autumn", "Winter"]
+        current_idx = seasons.index(self.season)
+        self.season = seasons[(current_idx + 1) % 4]
+        
+        # Seasonal temperature variations
+        if self.season == "Summer":
+            self.temperature = 25 + self.rng.uniform(-5, 5)
+        elif self.season == "Winter":
+            self.temperature = 5 + self.rng.uniform(-5, 5)
+        else:
+            self.temperature = 15 + self.rng.uniform(-5, 5)
+        
+        # Seasonal rainfall variations
+        if self.season in ["Spring", "Autumn"]:
+            self.rainfall = 60 + self.rng.uniform(-20, 20)
+        else:
+            self.rainfall = 40 + self.rng.uniform(-15, 15)
+
+    def to_dict(self):
+        """Convert ClimateSystem data to a dictionary for saving"""
+        return {
+            'season': self.season,
+            'temperature': self.temperature,
+            'rainfall': self.rainfall
+        }
+
+    @classmethod
+    def from_dict(cls, data, rng=None):
+        """Create ClimateSystem from saved dictionary data"""
+        climate = cls(rng=rng)
+        climate.season = data['season']
+        climate.temperature = data['temperature']
+        climate.rainfall = data['rainfall']
+        return climate
+
+class Civilization:
+    """Represents a civilization with its attributes"""
+    def __init__(self, world, id_num, name=None, population=None, technology=None, map_position=None):
+        self.world = world
+        self.id = id_num
+        self.name = name if name is not None else self.generate_name()
+        self.population = population if population is not None else random.randint(1000, 5000)
+        self.technology = technology if technology is not None else 1.0
+        self.map_position = map_position if map_position is not None else (0, 0)
+        self.recent_events = []
+        
+    def generate_name(self):
+        """Generate a random civilization name (non-deterministic)"""
+        prefixes = ["Great ", "Holy ", "United "]
+        roots = ["Ara", "Belo", "Cartha", "Dun"]
+        suffixes = ["nia", "dor", "thia", "land"]
+        name = random.choice(roots) + random.choice(suffixes)
+        if random.random() > 0.7:
+            name = random.choice(prefixes) + name
+        return name
+    
+    def update(self):
+        """Progress civilization by one year"""
+        # Population growth (non-deterministic)
+        growth = random.randint(10, 100)
+        self.population += growth
+        
+        # Technology progress (non-deterministic)
+        if random.random() < 0.2:
+            self.technology += 0.1
+        
+        # Random events (non-deterministic)
+        if random.random() < 0.3:
+            events = [
+                f"🏗️ {self.name} builds a new settlement",
+                f"📜 {self.name} makes a scientific discovery",
+                f"🌾 {self.name} has a bountiful harvest",
+                f"⚔️ {self.name} engages in border skirmishes"
+            ]
+            self.recent_events.append(random.choice(events))
+    
+    def get_events(self):
+        """Get and clear recent events"""
+        events = self.recent_events.copy()
+        self.recent_events.clear()
+        return events
+
+    def to_dict(self):
+        """Convert Civilization data to a dictionary for saving"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'population': self.population,
+            'technology': self.technology,
+            'map_position': self.map_position
+        }
+
+    @classmethod
+    def from_dict(cls, world, data):
+        """Create Civilization from saved dictionary data"""
+        return cls(
+            world=world,
+            id_num=data['id'],
+            name=data['name'],
+            population=data['population'],
+            technology=data['technology'],
+            map_position=data['map_position']
+        )
+
+"""
+====================== MAIN SIMULATION ======================
+This class ties all systems together and runs the simulation
+"""
+
+class CivilizationObserver:
+    """Main game class that orchestrates the simulation"""
+    def __init__(self):
+        self.world_seed = None
+        self.current_year = 0
+        self.civilizations = []
+        self.world_map = None
+        self.climate = None
+        self.history = []
+    
+    def generate_world(self, seed=None):
+        """Initialize a new world"""
+        self.world_seed = seed if seed is not None else datetime.now().timestamp()
+        
+        # Initialize world systems with the seed
+        self.world_map = WorldMap(seed=self.world_seed)
+        self.climate = ClimateSystem(rng=random.Random(self.world_seed))
+        
+        # Generate world geography (deterministic)
+        self.world_map.generate_geography()
+        
+        # Create 3-5 civilizations (non-deterministic count)
+        civ_count = random.randint(3, 5)
+        self.civilizations = [Civilization(self, i) for i in range(civ_count)]
+        
+        # Place civilizations on the map (partially deterministic)
+        for civ in self.civilizations:
+            self.world_map.place_civilization(civ)
+        
+        print(f"🌍 World Created (Seed: {self.world_seed})")
+        print(f"🏙️ {len(self.civilizations)} civilizations generated")
+    
+    def advance_year(self):
+        """Progress the simulation by one year"""
+        self.current_year += 1
+        year_report = {
+            "year": self.current_year,
+            "world_events": [],
+            "civilization_events": []
+        }
+        
+        # Climate changes (deterministic)
+        self.climate.update()
+        
+        # Update all civilizations (non-deterministic)
+        for civ in self.civilizations[:]:
+            civ.update()
+            year_report["civilization_events"].extend(civ.get_events())
+        
+        # Add to history
+        self.history.append(year_report)
+        
+        return year_report
+    
+    def display_world(self):
+        """Show current world state"""
+        self.world_map.display(self.civilizations)
+        print(f"\nYear: {self.current_year}")
+        print(f"Season: {self.climate.season}")
+        print(f"Temperature: {self.climate.temperature:.1f}°C")
+        print(f"Rainfall: {self.climate.rainfall:.1f}mm")
+        print(f"World Seed: {self.world_seed}")
+
+    def save_game(self, filename):
+        """Save the current game state to a file"""
+        save_data = {
+            'world_seed': self.world_seed,
+            'current_year': self.current_year,
+            'civilizations': [civ.to_dict() for civ in self.civilizations],
+            'world_map': self.world_map.to_dict(),
+            'climate': self.climate.to_dict(),
+            'history': self.history
+        }
+        
+        with open(filename, 'w') as f:
+            json.dump(save_data, f, indent=2)
+        
+        print(f"Game saved to {filename}")
+
+    def load_game(self, filename):
+        """Load a game state from a file"""
+        with open(filename, 'r') as f:
+            save_data = json.load(f)
+        
+        # Restore basic properties
+        self.world_seed = save_data['world_seed']
+        self.current_year = save_data['current_year']
+        self.history = save_data['history']
+        
+        # Restore world systems with the original seed
+        rng = random.Random(self.world_seed)
+        self.world_map = WorldMap.from_dict(save_data['world_map'])
+        self.climate = ClimateSystem.from_dict(save_data['climate'], rng=rng)
+        
+        # Restore civilizations
+        self.civilizations = [
+            Civilization.from_dict(self, civ_data)
+            for civ_data in save_data['civilizations']
+        ]
+        
+        print(f"Game loaded from {filename}")
+        print(f"Year: {self.current_year}")
+        print(f"Civilizations: {len(self.civilizations)}")
+        print(f"World Seed: {self.world_seed}")
+
+"""
+====================== MAIN GAME LOOP ======================
+"""
+
+def main():
+    """Entry point for the simulation"""
+    print("=== CIVILIZATION OBSERVER ===")
+    print("Watch civilizations develop over time!")
+    
+    # Initialize game
+    game = CivilizationObserver()
+    
+    # Check for load command
+    if len(os.sys.argv) > 1 and os.sys.argv[1] == "--load":
+        if len(os.sys.argv) > 2:
+            game.load_game(os.sys.argv[2])
+        else:
+            print("Please specify a save file to load")
+            return
+    else:
+        # Create new world
+        seed_input = input("Enter a seed number (or leave blank for random): ").strip()
+        seed = int(seed_input) if seed_input else None
+        game.generate_world(seed)
+    
+    input("\nPress Enter to begin simulation...")
+    
+    try:
+        while True:
+            os.system('cls' if os.name == 'nt' else 'clear')
+            
+            # Display world
+            game.display_world()
+            
+            # Advance year and get report
+            year_report = game.advance_year()
+            
+            # Display events
+            if year_report["civilization_events"]:
+                print("\nCIVILIZATION EVENTS:")
+                for event in year_report["civilization_events"]:
+                    print(f"- {event}")
+            
+            # Prompt for next action
+            cmd = input("\nPress Enter to continue, 's' to save, or 'q' to quit: ").lower()
+            if cmd == 'q':
+                break
+            elif cmd == 's':
+                save_file = input("Enter save file name: ").strip()
+                if save_file:
+                    game.save_game(save_file)
+                    input("Game saved. Press Enter to continue...")
+    
+    except KeyboardInterrupt:
+        print("\nSimulation ended by user.")
+
+if __name__ == "__main__":
+    main()

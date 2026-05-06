@@ -1,0 +1,624 @@
+Fantasy Engine Pre Alpha 2
+
+import random
+import time
+from datetime import datetime
+import os
+import math
+import json
+from collections import defaultdict
+
+"""
+====================== CORE SYSTEMS ======================
+These classes handle the fundamental world simulation mechanics
+"""
+
+class WorldMap:
+    """Handles world geography and civilization placement"""
+    def __init__(self, width=40, height=20, seed=None):
+        self.width = width
+        self.height = height
+        self.seed = seed if seed is not None else datetime.now().timestamp()
+        self.rng = random.Random(self.seed)  # Dedicated RNG for this world
+        
+        # Initialize grid with plains ('.')
+        self.grid = [['.' for _ in range(width)] for _ in range(height)]
+        
+        # Terrain type definitions
+        self.terrain_types = {
+            '.': "Plains",
+            '^': "Mountains",
+            '~': "Rivers",
+            '*': "Forests",
+            '#': "Desert"
+        }
+        
+        # Civilization positions storage
+        self.civilization_locations = {}
+
+    def generate_geography(self):
+        """Generate basic terrain features using the seeded RNG"""
+        for y in range(self.height):
+            for x in range(self.width):
+                r = self.rng.random()
+                if r < 0.05:
+                    self.grid[y][x] = '^'  # 5% chance for mountains
+                elif r < 0.15:
+                    self.grid[y][x] = '*'  # 10% chance for forests
+                elif r < 0.2:
+                    self.grid[y][x] = '~'  # 5% chance for rivers
+                elif r < 0.25:
+                    self.grid[y][x] = '#'  # 5% chance for desert
+
+        # Generate rivers that flow downstream
+        for _ in range(self.rng.randint(3, 5)):  # 3-5 rivers
+            x, y = self.rng.randint(0, self.width-1), self.rng.randint(0, self.height-1)
+            length = self.rng.randint(5, 10)
+            for _ in range(length):
+                if 0 <= x < self.width and 0 <= y < self.height:
+                    self.grid[y][x] = '~'
+                    # River flows south and randomly east/west
+                    x += self.rng.choice([-1, 0, 1])
+                    y += 1
+
+    def place_civilization(self, civ):
+        """Find suitable location for a civilization"""
+        for _ in range(50):  # Try 50 random spots
+            x, y = self.rng.randint(0, self.width-1), self.rng.randint(0, self.height-1)
+            if self.grid[y][x] == '.':  # Prefer plains
+                # Check for nearby water
+                for dy in [-1, 0, 1]:
+                    for dx in [-1, 0, 1]:
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < self.width and 0 <= ny < self.height:
+                            if self.grid[ny][nx] == '~':  # Found water
+                                self.civilization_locations[civ.name] = (x, y)
+                                civ.map_position = (x, y)
+                                return True
+        return False
+
+    def display(self, civilizations):
+        """Print ASCII map of the world"""
+        print("\nWorld Map:")
+        for y in range(self.height):
+            row = []
+            for x in range(self.width):
+                # Check for civilizations first
+                for civ in civilizations:
+                    if (x, y) == civ.map_position:
+                        row.append(civ.name[0].upper())
+                        break
+                else:
+                    row.append(self.grid[y][x])
+            print("".join(row))
+        
+        print("\nLegend:")
+        print("Letters: Civilizations (first letter)")
+        for symbol, name in self.terrain_types.items():
+            print(f"{symbol}: {name}")
+
+    def to_dict(self):
+        """Convert WorldMap data to a dictionary for saving"""
+        return {
+            'width': self.width,
+            'height': self.height,
+            'seed': self.seed,
+            'grid': self.grid,
+            'civilization_locations': self.civilization_locations
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        """Create WorldMap from saved dictionary data"""
+        world_map = cls(width=data['width'], height=data['height'], seed=data['seed'])
+        world_map.grid = data['grid']
+        world_map.civilization_locations = data['civilization_locations']
+        return world_map
+
+class ClimateSystem:
+    """Handles seasonal changes and weather events"""
+    def __init__(self, rng=None):
+        self.season = "Spring"
+        self.temperature = 15  # Average temperature in °C
+        self.rainfall = 50     # Average rainfall in mm
+        self.rng = rng if rng is not None else random.Random()
+
+    def update(self):
+        """Progress through seasons"""
+        seasons = ["Spring", "Summer", "Autumn", "Winter"]
+        current_idx = seasons.index(self.season)
+        self.season = seasons[(current_idx + 1) % 4]
+        
+        # Seasonal temperature variations
+        if self.season == "Summer":
+            self.temperature = 25 + self.rng.uniform(-5, 5)
+        elif self.season == "Winter":
+            self.temperature = 5 + self.rng.uniform(-5, 5)
+        else:
+            self.temperature = 15 + self.rng.uniform(-5, 5)
+        
+        # Seasonal rainfall variations
+        if self.season in ["Spring", "Autumn"]:
+            self.rainfall = 60 + self.rng.uniform(-20, 20)
+        else:
+            self.rainfall = 40 + self.rng.uniform(-15, 15)
+
+    def to_dict(self):
+        """Convert ClimateSystem data to a dictionary for saving"""
+        return {
+            'season': self.season,
+            'temperature': self.temperature,
+            'rainfall': self.rainfall
+        }
+
+    @classmethod
+    def from_dict(cls, data, rng=None):
+        """Create ClimateSystem from saved dictionary data"""
+        climate = cls(rng=rng)
+        climate.season = data['season']
+        climate.temperature = data['temperature']
+        climate.rainfall = data['rainfall']
+        return climate
+
+class Civilization:
+    """Represents a civilization with its attributes and relationships"""
+    def __init__(self, world, id_num, name=None, population=None, technology=None, map_position=None):
+        self.world = world
+        self.id = id_num
+        self.name = name if name is not None else self.generate_name()
+        self.population = population if population is not None else random.randint(1000, 5000)
+        self.technology = technology if technology is not None else 1.0
+        self.map_position = map_position if map_position is not None else (0, 0)
+        self.recent_events = []
+        
+        # Diplomacy system - relationships with other civilizations
+        self.relationships = {}  # Format: {"OtherCivName": {"attitude": int, "last_event": str, "years_since_contact": int}}
+        
+        # Civilization personality traits (for future expansion)
+        self.traits = {
+            "aggressive": random.uniform(0, 1),
+            "peaceful": random.uniform(0, 1),
+            "expansionist": random.uniform(0, 1)
+        }
+        
+    def generate_name(self):
+        """Generate a random civilization name (non-deterministic)"""
+        prefixes = ["Great ", "Holy ", "United "]
+        roots = ["Ara", "Belo", "Cartha", "Dun"]
+        suffixes = ["nia", "dor", "thia", "land"]
+        name = random.choice(roots) + random.choice(suffixes)
+        if random.random() > 0.7:
+            name = random.choice(prefixes) + name
+        return name
+    
+    def initialize_relationships(self, other_civilizations):
+        """Initialize relationships with all other civilizations"""
+        for other_civ in other_civilizations:
+            if other_civ.name != self.name:
+                # Start with slightly random neutral relationships (-15 to +15)
+                initial_attitude = random.randint(-15, 15)
+                self.relationships[other_civ.name] = {
+                    "attitude": initial_attitude,
+                    "last_event": "none",
+                    "years_since_contact": 0
+                }
+    
+    def update_relationship_drift(self):
+        """Apply natural drift toward neutral over time"""
+        for other_civ_name, relationship in self.relationships.items():
+            attitude = relationship["attitude"]
+            
+            # Natural drift toward neutral
+            if attitude > 0:
+                relationship["attitude"] = max(0, attitude - 1)
+            elif attitude < 0:
+                relationship["attitude"] = min(0, attitude + 1)
+            
+            # Increment years since contact
+            relationship["years_since_contact"] += 1
+    
+    def get_relationship_status(self, attitude):
+        """Convert numerical attitude to descriptive status"""
+        if attitude >= 70:
+            return "Allied"
+        elif attitude >= 40:
+            return "Friendly"
+        elif attitude >= 10:
+            return "Positive"
+        elif attitude <= -70:
+            return "At War"
+        elif attitude <= -40:
+            return "Hostile"
+        elif attitude <= -10:
+            return "Tense"
+        else:
+            return "Neutral"
+    
+    def update(self):
+        """Progress civilization by one year"""
+        # Population growth (non-deterministic)
+        growth = random.randint(10, 100)
+        self.population += growth
+        
+        # Technology progress (non-deterministic)
+        if random.random() < 0.2:
+            self.technology += 0.1
+        
+        # Random events (non-deterministic)
+        if random.random() < 0.3:
+            events = [
+                f"🏗️ {self.name} builds a new settlement",
+                f"📜 {self.name} makes a scientific discovery",
+                f"🌾 {self.name} has a bountiful harvest",
+                f"⚔️ {self.name} engages in border skirmishes"
+            ]
+            self.recent_events.append(random.choice(events))
+    
+    def get_events(self):
+        """Get and clear recent events"""
+        events = self.recent_events.copy()
+        self.recent_events.clear()
+        return events
+
+    def to_dict(self):
+        """Convert Civilization data to a dictionary for saving"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'population': self.population,
+            'technology': self.technology,
+            'map_position': self.map_position,
+            'relationships': self.relationships,
+            'traits': self.traits
+        }
+
+    @classmethod
+    def from_dict(cls, world, data):
+        """Create Civilization from saved dictionary data"""
+        civ = cls(
+            world=world,
+            id_num=data['id'],
+            name=data['name'],
+            population=data['population'],
+            technology=data['technology'],
+            map_position=data['map_position']
+        )
+        civ.relationships = data.get('relationships', {})
+        civ.traits = data.get('traits', {})
+        return civ
+
+"""
+====================== DIPLOMACY SYSTEM ======================
+Handles civilization interactions and relationships
+"""
+
+class DiplomacySystem:
+    """Manages diplomatic interactions between civilizations"""
+    
+    # Diplomacy event definitions
+    EVENT_CHANCES = {
+        "trade": {"min_attitude": 40, "chance": 10, "attitude_change": 10, "pop_effect": (100, 300)},
+        "alliance": {"min_attitude": 70, "chance": 3, "attitude_change": 20, "tech_effect": 0.1},
+        "skirmish": {"max_attitude": -40, "chance": 6, "attitude_change": -10, "pop_effect": (-200, -50)},
+        "war": {"max_attitude": -70, "chance": 2, "attitude_change": -30, "pop_effect": (-0.3, -0.1)},  # Percentage based
+        "peace_treaty": {"during_war": True, "chance": 6, "attitude_change": 15, "pop_effect": (0.05, 0.1)}  # Percentage based recovery
+    }
+    
+    # Interaction radius (in map tiles)
+    INTERACTION_RADIUS = 12
+    
+    def __init__(self, world_map):
+        self.world_map = world_map
+    
+    def calculate_distance(self, pos1, pos2):
+        """Calculate Euclidean distance between two positions"""
+        return math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2)
+    
+    def process_diplomacy_year(self, civilizations, current_year):
+        """Process diplomatic interactions for all civilization pairs"""
+        diplomatic_events = []
+        
+        for i, civ_a in enumerate(civilizations):
+            for j, civ_b in enumerate(civilizations):
+                if i >= j:  # Avoid duplicate pairs and self-interaction
+                    continue
+                
+                # Check if civilizations are close enough to interact
+                distance = self.calculate_distance(civ_a.map_position, civ_b.map_position)
+                if distance > self.INTERACTION_RADIUS:
+                    continue
+                
+                # Get relationship data
+                attitude_a_to_b = civ_a.relationships[civ_b.name]["attitude"]
+                attitude_b_to_a = civ_b.relationships[civ_a.name]["attitude"]
+                
+                # Determine if an event occurs
+                event = self._determine_diplomatic_event(civ_a, civ_b, attitude_a_to_b, attitude_b_to_a)
+                
+                if event:
+                    # Apply event effects
+                    self._apply_diplomatic_event(civ_a, civ_b, event)
+                    
+                    # Record event
+                    event_description = self._format_event_description(civ_a, civ_b, event)
+                    diplomatic_events.append(event_description)
+                    
+                    # Update relationship memory
+                    civ_a.relationships[civ_b.name]["last_event"] = event["type"]
+                    civ_b.relationships[civ_a.name]["last_event"] = event["type"]
+                    civ_a.relationships[civ_b.name]["years_since_contact"] = 0
+                    civ_b.relationships[civ_a.name]["years_since_contact"] = 0
+        
+        return diplomatic_events
+    
+    def _determine_diplomatic_event(self, civ_a, civ_b, attitude_a_to_b, attitude_b_to_a):
+        """Determine if a diplomatic event occurs between two civilizations"""
+        # Use average attitude for decision making
+        avg_attitude = (attitude_a_to_b + attitude_b_to_a) / 2
+        
+        # Check each possible event type
+        for event_type, params in self.EVENT_CHANCES.items():
+            # Check if conditions are met
+            conditions_met = True
+            
+            if "min_attitude" in params and avg_attitude < params["min_attitude"]:
+                conditions_met = False
+            if "max_attitude" in params and avg_attitude > params["max_attitude"]:
+                conditions_met = False
+            if "during_war" in params and params["during_war"]:
+                # Check if they're actually at war (both have very negative attitudes)
+                if attitude_a_to_b > -70 or attitude_b_to_a > -70:
+                    conditions_met = False
+            
+            if conditions_met:
+                # Roll for chance
+                if random.randint(1, 100) <= params["chance"]:
+                    return {"type": event_type, "params": params, "avg_attitude": avg_attitude}
+        
+        return None
+    
+    def _apply_diplomatic_event(self, civ_a, civ_b, event):
+        """Apply the effects of a diplomatic event to both civilizations"""
+        params = event["params"]
+        
+        # Update attitudes
+        civ_a.relationships[civ_b.name]["attitude"] += params["attitude_change"]
+        civ_b.relationships[civ_a.name]["attitude"] += params["attitude_change"]
+        
+        # Clamp attitudes to valid range
+        civ_a.relationships[civ_b.name]["attitude"] = max(-100, min(100, civ_a.relationships[civ_b.name]["attitude"]))
+        civ_b.relationships[civ_a.name]["attitude"] = max(-100, min(100, civ_b.relationships[civ_a.name]["attitude"]))
+        
+        # Apply population effects
+        if "pop_effect" in params:
+            pop_effect = params["pop_effect"]
+            if event["type"] in ["war", "peace_treaty"]:
+                # Percentage-based effects
+                civ_a_mult = 1 + random.uniform(pop_effect[0], pop_effect[1])
+                civ_b_mult = 1 + random.uniform(pop_effect[0], pop_effect[1])
+                civ_a.population = max(100, int(civ_a.population * civ_a_mult))
+                civ_b.population = max(100, int(civ_b.population * civ_b_mult))
+            else:
+                # Fixed population effects
+                civ_a.population += random.randint(pop_effect[0], pop_effect[1])
+                civ_b.population += random.randint(pop_effect[0], pop_effect[1])
+        
+        # Apply technology effects
+        if "tech_effect" in params:
+            tech_effect = params["tech_effect"]
+            civ_a.technology += tech_effect
+            civ_b.technology += tech_effect
+    
+    def _format_event_description(self, civ_a, civ_b, event):
+        """Create a readable description of a diplomatic event"""
+        event_type = event["type"]
+        attitude_change = event["params"]["attitude_change"]
+        
+        descriptions = {
+            "trade": f"🤝 {civ_a.name} and {civ_b.name} established a trade pact (+{attitude_change} relations)",
+            "alliance": f"🕊️ {civ_a.name} and {civ_b.name} formed an alliance (+{attitude_change} relations)",
+            "skirmish": f"⚔️ {civ_a.name} and {civ_b.name} engaged in border skirmishes ({attitude_change} relations)",
+            "war": f"💥 {civ_a.name} declared war on {civ_b.name} ({attitude_change} relations)",
+            "peace_treaty": f"☮️ {civ_a.name} and {civ_b.name} signed a peace treaty (+{attitude_change} relations)"
+        }
+        
+        return descriptions.get(event_type, f"{civ_a.name} and {civ_b.name} had diplomatic interactions")
+
+"""
+====================== MAIN SIMULATION ======================
+This class ties all systems together and runs the simulation
+"""
+
+class CivilizationObserver:
+    """Main game class that orchestrates the simulation"""
+    def __init__(self):
+        self.world_seed = None
+        self.current_year = 0
+        self.civilizations = []
+        self.world_map = None
+        self.climate = None
+        self.diplomacy = None
+        self.history = []
+    
+    def generate_world(self, seed=None):
+        """Initialize a new world"""
+        self.world_seed = seed if seed is not None else datetime.now().timestamp()
+        
+        # Initialize world systems with the seed
+        self.world_map = WorldMap(seed=self.world_seed)
+        self.climate = ClimateSystem(rng=random.Random(self.world_seed))
+        self.diplomacy = DiplomacySystem(self.world_map)
+        
+        # Generate world geography (deterministic)
+        self.world_map.generate_geography()
+        
+        # Create 3-5 civilizations (non-deterministic count)
+        civ_count = random.randint(3, 5)
+        self.civilizations = [Civilization(self, i) for i in range(civ_count)]
+        
+        # Place civilizations on the map (partially deterministic)
+        for civ in self.civilizations:
+            self.world_map.place_civilization(civ)
+        
+        # Initialize relationships between civilizations
+        for civ in self.civilizations:
+            civ.initialize_relationships(self.civilizations)
+        
+        print(f"🌍 World Created (Seed: {self.world_seed})")
+        print(f"🏙️ {len(self.civilizations)} civilizations generated")
+    
+    def advance_year(self):
+        """Progress the simulation by one year"""
+        self.current_year += 1
+        year_report = {
+            "year": self.current_year,
+            "world_events": [],
+            "civilization_events": [],
+            "diplomatic_events": []
+        }
+        
+        # Climate changes (deterministic)
+        self.climate.update()
+        
+        # Update all civilizations (non-deterministic)
+        for civ in self.civilizations[:]:
+            civ.update()
+            year_report["civilization_events"].extend(civ.get_events())
+        
+        # Process diplomacy (new system!)
+        diplomatic_events = self.diplomacy.process_diplomacy_year(self.civilizations, self.current_year)
+        year_report["diplomatic_events"] = diplomatic_events
+        
+        # Apply relationship drift
+        for civ in self.civilizations:
+            civ.update_relationship_drift()
+        
+        # Add to history
+        self.history.append(year_report)
+        
+        return year_report
+    
+    def display_world(self):
+        """Show current world state"""
+        self.world_map.display(self.civilizations)
+        print(f"\nYear: {self.current_year}")
+        print(f"Season: {self.climate.season}")
+        print(f"Temperature: {self.climate.temperature:.1f}°C")
+        print(f"Rainfall: {self.climate.rainfall:.1f}mm")
+        print(f"World Seed: {self.world_seed}")
+        
+        # Display relationship summary
+        print(f"\nDiplomatic Relations:")
+        for civ in self.civilizations:
+            print(f"  {civ.name}:")
+            for other_name, relationship in civ.relationships.items():
+                status = civ.get_relationship_status(relationship["attitude"])
+                print(f"    - {other_name}: {status} ({relationship['attitude']})")
+
+    def save_game(self, filename):
+        """Save the current game state to a file"""
+        save_data = {
+            'world_seed': self.world_seed,
+            'current_year': self.current_year,
+            'civilizations': [civ.to_dict() for civ in self.civilizations],
+            'world_map': self.world_map.to_dict(),
+            'climate': self.climate.to_dict(),
+            'history': self.history
+        }
+        
+        with open(filename, 'w') as f:
+            json.dump(save_data, f, indent=2)
+        
+        print(f"Game saved to {filename}")
+
+    def load_game(self, filename):
+        """Load a game state from a file"""
+        with open(filename, 'r') as f:
+            save_data = json.load(f)
+        
+        # Restore basic properties
+        self.world_seed = save_data['world_seed']
+        self.current_year = save_data['current_year']
+        self.history = save_data['history']
+        
+        # Restore world systems with the original seed
+        rng = random.Random(self.world_seed)
+        self.world_map = WorldMap.from_dict(save_data['world_map'])
+        self.climate = ClimateSystem.from_dict(save_data['climate'], rng=rng)
+        self.diplomacy = DiplomacySystem(self.world_map)
+        
+        # Restore civilizations
+        self.civilizations = [
+            Civilization.from_dict(self, civ_data)
+            for civ_data in save_data['civilizations']
+        ]
+        
+        print(f"Game loaded from {filename}")
+        print(f"Year: {self.current_year}")
+        print(f"Civilizations: {len(self.civilizations)}")
+        print(f"World Seed: {self.world_seed}")
+
+"""
+====================== MAIN GAME LOOP ======================
+"""
+
+def main():
+    """Entry point for the simulation"""
+    print("=== CIVILIZATION OBSERVER ===")
+    print("Watch civilizations develop over time!")
+    
+    # Initialize game
+    game = CivilizationObserver()
+    
+    # Check for load command
+    if len(os.sys.argv) > 1 and os.sys.argv[1] == "--load":
+        if len(os.sys.argv) > 2:
+            game.load_game(os.sys.argv[2])
+        else:
+            print("Please specify a save file to load")
+            return
+    else:
+        # Create new world
+        seed_input = input("Enter a seed number (or leave blank for random): ").strip()
+        seed = int(seed_input) if seed_input else None
+        game.generate_world(seed)
+    
+    input("\nPress Enter to begin simulation...")
+    
+    try:
+        while True:
+            os.system('cls' if os.name == 'nt' else 'clear')
+            
+            # Display world
+            game.display_world()
+            
+            # Advance year and get report
+            year_report = game.advance_year()
+            
+            # Display events
+            if year_report["civilization_events"]:
+                print("\nCIVILIZATION EVENTS:")
+                for event in year_report["civilization_events"]:
+                    print(f"- {event}")
+            
+            if year_report["diplomatic_events"]:
+                print("\nDIPLOMATIC EVENTS:")
+                for event in year_report["diplomatic_events"]:
+                    print(f"- {event}")
+            
+            # Prompt for next action
+            cmd = input("\nPress Enter to continue, 's' to save, or 'q' to quit: ").lower()
+            if cmd == 'q':
+                break
+            elif cmd == 's':
+                save_file = input("Enter save file name: ").strip()
+                if save_file:
+                    game.save_game(save_file)
+                    input("Game saved. Press Enter to continue...")
+    
+    except KeyboardInterrupt:
+        print("\nSimulation ended by user.")
+
+if __name__ == "__main__":
+    main()
+[file content end]

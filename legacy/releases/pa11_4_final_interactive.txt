@@ -1,0 +1,2154 @@
+import random
+import time
+from datetime import datetime
+import os
+import math
+import json
+from collections import defaultdict
+
+"""
+========================================================================
+ FANTASY ENGINE - PRE-ALPHA 11.4: FINAL (INTERACTIVE)
+========================================================================
+This is the complete, interactive version of Pre-Alpha 11.
+It includes the full engine from 11.3 (Health, Goals, Factions, 
+Regency, Holy Wars) and re-integrates the interactive UI menu.
+
+- Fully interactive menu for saving, loading, and advancing time.
+- [V] Legends menu to view history.
+- [I] Individuals menu to view people.
+- [F] Factions menu to view political factions.
+- All systems are fully integrated and reproducible from a seed.
+========================================================================
+"""
+
+# --- NAME GENERATION (HELPER) ---
+MALE_NAMES = ["Alaric", "Borin", "Cedric", "Darian", "Eldrin", "Faron", "Gareth", "Hakon", 
+              "Ivor", "Jarek", "Kael", "Lorik", "Marek", "Nolan", "Orin", "Pavel", "Quinn",
+              "Rurik", "Soren", "Torval", "Uther", "Varek", "Willem", "Xander", "Yorin", "Zane"]
+FEMALE_NAMES = ["Althea", "Brienne", "Cyrene", "Diana", "Elara", "Freyja", "Gwen", "Helena",
+                "Ilyana", "Jocelyn", "Kara", "Lyra", "Morgan", "Nyssa", "Orla", "Piper",
+                "Quinn", "Rhian", "Sylvia", "Talia", "Ursa", "Valeria", "Willow", "Xandra",
+                "Yara", "Zara"]
+DYNASTY_PREFIXES = ["Val", "Cor", "Ston", "Iron", "Silv", "Win", "Ara", "Cas", "Mor", "Hel"]
+DYNASTY_SUFFIXES = ["us", "ian", "ar", "en", "ett", "wood", "crest", "fall", "hart", "wind"]
+TRAITS = ["Brave", "Cowardly", "Kind", "Cruel", "Ambitious", "Content", "Honest", "Deceitful",
+          "Pious", "Cynical", "Genius", "Dull", "Paranoid", "Trusting", "Greedy", "Generous",
+          "Lustful", "Chaste", "Robust", "Sickly"]
+
+
+"""
+====================== 1. DEEP HISTORY & LEGENDS SYSTEM ======================
+"""
+
+class HistoryEvent:
+    """Represents a structured historical event with metadata"""
+    
+    EVENT_TYPES = {
+        # Civilization Events
+        "foundation": "Civilization Founded",
+        "leader_death": "Leader Death",
+        "leader_succession": "Leadership Change", 
+        "war_declaration": "War Declaration",
+        "war_victory": "War Victory",
+        "war_defeat": "War Defeat",
+        "famine": "Famine",
+        "golden_age": "Golden Age",
+        "civil_war": "Civil War",
+        "rebellion": "Rebellion",
+        "economic_boom": "Economic Boom",
+        "economic_crisis": "Economic Crisis",
+        "economic_collapse": "Economic Collapse",
+        "population_boom": "Population Growth",
+        "population_collapse": "Population Decline",
+        "technology_breakthrough": "Technology Advance",
+        "tech_advance": "Technological Advancement",
+        "natural_disaster": "Natural Disaster",
+        
+        # Diplomatic Events
+        "diplomatic_alliance": "Alliance Formed",
+        "alliance_formed": "Diplomatic Alliance",
+        "diplomatic_trade": "Trade Pact",
+        "diplomatic_peace": "Peace Treaty",
+        "relations_improved": "Improved Relations",
+        "relations_worsened": "Worsened Relations",
+        "battle": "Military Battle",
+
+        # Culture & Religion Events
+        "cultural_boom": "Cultural Renaissance",
+        "cultural_renaissance": "Cultural Flourishing",
+        "cultural_artifact": "Artistic Creation",
+        "festival": "Cultural Festival",
+        "religion_founded": "New Religion Founded",
+        "religious_conversion": "Religious Change",
+        "religious_schism": "Religious Split", 
+        "religious_reformation": "Religious Reform",
+        "pilgrimage": "Religious Journey",
+        "holy_war_declaration": "Holy War Declared",
+
+        # Individual & Dynasty Events
+        "birth": "Birth",
+        "death": "Death",
+        "marriage": "Marriage",
+        "succession": "Succession",
+        "hero_achievement": "Heroic Act",
+        "dynasty_founded": "Dynasty Founded",
+        "dynasty_ended": "End of a Dynasty",
+        "usurpation": "Usurpation",
+        "assassination": "Assassination",
+        "faction_coup": "Faction Coup",
+        "regency_start": "Regency Begins",
+        
+        # Other
+        "annual_summary": "Yearly Summary"
+    }
+    
+    def __init__(self, year, event_type, civilization, details, 
+                 person_id=None, other_civ=None, severity="normal", caused_by=None, rng=None):
+        self.year = year
+        self.event_type = event_type
+        self.civilization = civilization 
+        self.details = details
+        self.person_id = person_id 
+        self.other_civilization = other_civ
+        self.severity = severity
+        self.caused_by = caused_by
+        
+        _rng = rng or random
+        self.id = f"{year}_{civilization}_{event_type}_{_rng.randint(1000,9999)}"
+    
+    def to_dict(self):
+        """Convert to dictionary for serialization"""
+        return {
+            'id': self.id,
+            'year': self.year,
+            'event_type': self.event_type,
+            'civilization': self.civilization,
+            'details': self.details,
+            'person_id': self.person_id,
+            'other_civilization': self.other_civilization,
+            'severity': self.severity,
+            'caused_by': self.caused_by
+        }
+    
+    @classmethod
+    def from_dict(cls, data):
+        """Create from saved dictionary"""
+        event = cls(
+            year=data['year'],
+            event_type=data['event_type'],
+            civilization=data['civilization'],
+            details=data['details'],
+            person_id=data.get('person_id'),
+            other_civ=data.get('other_civilization'),
+            severity=data.get('severity', 'normal'),
+            caused_by=data.get('caused_by'),
+            rng=None
+        )
+        event.id = data.get('id', f"{data['year']}_{data['civilization']}_{data['event_type']}_{random.randint(1000,9999)}")
+        return event
+    
+    def __str__(self):
+        return f"Year {self.year}: {self.EVENT_TYPES.get(self.event_type, self.event_type)} - {self.details}"
+
+class HistoryArchive:
+    """Manages structured historical records and provides querying capabilities"""
+    
+    def __init__(self, rng=None):
+        self.global_history = []
+        self.event_index = {}
+        self.cause_effect_chains = []
+        self.last_major_events = {}
+        self.rng = rng or random.Random()
+        
+    def record_event(self, event):
+        """Record a new historical event"""
+        self.global_history.append(event)
+        
+        if event.event_type not in self.event_index:
+            self.event_index[event.event_type] = []
+        self.event_index[event.event_type].append(event)
+        
+        if event.severity in ["major", "catastrophic"]:
+            self.last_major_events[event.civilization] = event
+            
+        self._auto_link_cause_effect(event)
+    
+    def _auto_link_cause_effect(self, new_event):
+        """Automatically link events that are likely cause-effect pairs"""
+        
+        if new_event.event_type in ["war_declaration", "rebellion", "civil_war"]:
+            last_famine = self.get_recent_events(
+                civilization=new_event.civilization,
+                event_type="famine",
+                years_back=10,
+                current_year=new_event.year
+            )
+            if last_famine:
+                new_event.caused_by = last_famine[0].id
+                self.cause_effect_chains.append((last_famine[0].id, new_event.id))
+        
+        elif new_event.event_type == "golden_age":
+            recent_wars = self.get_recent_events(
+                civilization=new_event.civilization,
+                event_type="war_victory", 
+                years_back=20,
+                current_year=new_event.year
+            )
+            if recent_wars:
+                new_event.caused_by = recent_wars[0].id
+                self.cause_effect_chains.append((recent_wars[0].id, new_event.id))
+        
+        elif new_event.event_type == "succession":
+            last_death = self.get_recent_events(
+                civilization=new_event.civilization,
+                event_type=["death", "assassination"], 
+                years_back=1,
+                current_year=new_event.year
+            )
+            if last_death and last_death[0].person_id == new_event.caused_by:
+                new_event.caused_by = last_death[0].id
+                self.cause_effect_chains.append((last_death[0].id, new_event.id))
+    
+    def get_events(self, civilization=None, event_type=None, start_year=None, 
+                  end_year=None, person_id=None, severity=None):
+        """Query events with multiple filters"""
+        results = []
+        
+        if isinstance(event_type, list):
+            target_types = set(event_type)
+        elif event_type:
+            target_types = {event_type}
+        else:
+            target_types = None
+        
+        for event in self.global_history:
+            if civilization and event.civilization != civilization:
+                continue
+            if target_types and event.event_type not in target_types:
+                continue
+            if start_year and event.year < start_year:
+                continue
+            if end_year and event.year > end_year:
+                continue
+            if person_id and event.person_id != person_id:
+                continue
+            if severity and event.severity != severity:
+                continue
+                
+            results.append(event)
+        
+        return sorted(results, key=lambda x: x.year)
+    
+    def get_recent_events(self, civilization=None, event_type=None, years_back=10, current_year=None):
+        if not current_year:
+            if self.global_history:
+                current_year = self.global_history[-1].year
+            else:
+                return []
+                
+        return self.get_events(
+            civilization=civilization,
+            event_type=event_type,
+            start_year=current_year - years_back,
+            end_year=current_year
+        )
+    
+    def get_person_timeline(self, person_id):
+        """Get all events related to a specific person"""
+        return self.get_events(person_id=person_id)
+    
+    def to_dict(self):
+        return {
+            'global_history': [event.to_dict() for event in self.global_history],
+            'cause_effect_chains': self.cause_effect_chains
+        }
+    
+    @classmethod
+    def from_dict(cls, data, rng=None):
+        archive = cls(rng=rng)
+        archive.global_history = [HistoryEvent.from_dict(event_data) for event_data in data['global_history']]
+        archive.cause_effect_chains = data.get('cause_effect_chains', [])
+        archive._rebuild_index()
+        return archive
+
+class LegendsMode:
+    """Provides natural language storytelling and historical narratives"""
+    
+    def __init__(self, history_archive, world_ref, rng=None):
+        self.archive = history_archive
+        self.world = world_ref 
+        self.rng = rng or random.Random()
+        self.story_templates = self._initialize_story_templates()
+    
+    def _get_person_name(self, person_id):
+        """Helper to get a person's full name from their ID"""
+        if not person_id:
+            return "an unknown figure"
+        person = self.world.get_person_by_id(person_id)
+        if person:
+            return person.full_name
+        return "a figure lost to history"
+
+    def _initialize_story_templates(self):
+        """Initialize natural language templates for different event types"""
+        return {
+            "leader_death": [
+                "In Year {year}, {leader_name} of {civ} passed away {details}.",
+                "The reign of {leader_name} over {civ} ended in Year {year} {details}.",
+                "{civ} mourned the loss of {leader_name} in Year {year} {details}."
+            ],
+            "death": [
+                "In Year {year}, {person_name} of {civ} {details}.",
+                "The year {year} saw the passing of {person_name}, {details}.",
+            ],
+            "assassination": [ 
+                "Tragedy struck in Year {year} as {person_name} of {civ} {details}.",
+                "{person_name} was murdered in {civ} in Year {year}, {details}.",
+            ],
+            "birth": [
+                "A child named {person_name} was born in {civ} in Year {year}, {details}.",
+                "Year {year} marked the birth of {person_name} in {civ}, {details}.",
+            ],
+            "succession": [
+                "Power in {civ} transferred to {person_name} in Year {year}, {details}.",
+                "Year {year}: {person_name} took the throne of {civ}, {details}.",
+            ],
+            "regency_start": [ 
+                "As {person_name} was too young, a regency was formed in {civ} in Year {year}, {details}.",
+                "Year {year}: {civ} fell under a regency, {details}.",
+            ],
+            "faction_coup": [ 
+                "Year {year} saw a coup in {civ}! {details}.",
+                "The government of {civ} was overthrown in {year} by {details}.",
+            ],
+            "war_declaration": [
+                "War erupted in Year {year} when {civ} declared war on {other_civ}.",
+                "The {year} conflict began as {civ} launched attacks against {other_civ}.",
+            ],
+            "holy_war_declaration": [ 
+                "A Holy War was declared in Year {year}! {civ} marched against {other_civ}, {details}.",
+                "Citing religious differences, {civ} declared a Holy War on {other_civ} in {year}.",
+            ],
+            "war_victory": [
+                "In a decisive victory in Year {year}, {civ} triumphed over {other_civ}, {details}.",
+                "{civ} achieved military glory in Year {year} by defeating {other_civ}, {details}.",
+            ],
+            "famine": [
+                "A great famine struck {civ} in Year {year}, {details}",
+            ],
+            "golden_age": [
+                "{civ} entered a glorious golden age in Year {year}, {details}",
+            ],
+            "cultural_renaissance": [
+                "{civ} experienced a cultural renaissance in Year {year}, {details}",
+            ],
+            "festival": [ 
+                "A grand festival was held in {civ} in Year {year}, {details}.",
+                "Year {year}: {civ} celebrated with a great festival, {details}.",
+            ],
+            "religion_founded": [
+                "Year {year} saw the founding of {details} in {civ}.",
+            ],
+            "religious_schism": [
+                "A great schism in Year {year} saw {civ} {details}.",
+            ],
+            "hero_achievement": [
+                "In Year {year}, {person_name} of {civ} became a legend by {details}.",
+                "The populace celebrated {person_name} in Year {year} after they {details}.",
+            ]
+        }
+    
+    def generate_story_view(self, civilization=None, start_year=None, end_year=None, 
+                          event_types=None, max_events=50):
+        """Generate natural language historical narrative"""
+        events = self.archive.get_events(
+            civilization=civilization,
+            start_year=start_year,
+            end_year=end_year
+        )
+        
+        if event_types:
+            events = [e for e in events if e.event_type in event_types]
+        
+        events = events[-max_events:] if len(events) > max_events else events
+        
+        if not events:
+            return "No significant events recorded in this period."
+        
+        story = []
+        current_era = None
+        
+        for event in events:
+            if current_era is None or event.year - current_era > 50:
+                if current_era is not None:
+                    story.append(f"\n--- The following years saw relative quiet ---\n")
+                current_era = event.year
+            
+            event_story = self._event_to_story(event)
+            story.append(event_story)
+        
+        return "\n".join(story)
+    
+    def _event_to_story(self, event):
+        """Convert a single event to natural language"""
+        template_group = self.story_templates.get(event.event_type)
+        if not template_group:
+            return f"Year {event.year}: {event.details}"
+        
+        template = self.rng.choice(template_group)
+        
+        person_name = self._get_person_name(event.person_id)
+        
+        story = template.format(
+            year=event.year,
+            civ=event.civilization,
+            person_name=person_name,
+            leader_name=person_name, 
+            other_civ=event.other_civilization or "their neighbors",
+            details=event.details.lower()
+        )
+        
+        if event.caused_by:
+            cause_event = next((e for e in self.archive.global_history if e.id == event.caused_by), None)
+            if cause_event:
+                cause_story = self._event_to_story(cause_event).split(': ')[-1]
+                story += f" This was sparked by {cause_story.lower()}"
+        
+        return story
+    
+    def generate_civilization_biography(self, civilization, current_year):
+        """Generate a comprehensive biography of a civilization"""
+        all_events = self.archive.get_civilization_timeline(civilization)
+        civ_obj = self.world.get_civ_by_name(civilization)
+        
+        if not all_events or not civ_obj:
+            return f"Little is known about the history of {civilization}."
+        
+        founding = next((e for e in all_events if e.event_type == "foundation"), None)
+        golden_ages = self.archive.get_events(civilization=civilization, event_type="golden_age")
+        major_wars = [e for e in all_events if e.event_type in ["war_declaration", "holy_war_declaration", "war_victory", "war_defeat"]]
+        
+        dynasties = civ_obj.dynasties
+        leader_history = [self.world.get_person_by_id(p.id) for p in civ_obj.leader_history]
+        
+        biography = [f"# The Chronicle of {civilization}\n"]
+        
+        if founding:
+            biography.append(f"{civilization} was founded in Year {founding.year}. {founding.details}\n")
+        else:
+            biography.append(f"The origins of {civilization} are lost to time, but their history is recorded from Year {all_events[0].year}.\n")
+        
+        biography.append(f"## Political Factions") 
+        if civ_obj.factions:
+            for faction in civ_obj.factions:
+                biography.append(f"- **The {faction.name}** (Influence: {int(faction.influence)})")
+        
+        biography.append(f"\n## Ruling Dynasties")
+        if dynasties:
+            biography.append(f"The civilization has been shaped by {len(dynasties)} major dynasties.")
+            for dynasty in dynasties:
+                biography.append(f"- **{dynasty.name}** (Prestige: {int(dynasty.prestige)})")
+        
+        biography.append(f"\n## Line of Rulers")
+        for leader in leader_history[-5:]:
+             if leader:
+                ruler_title = f"{leader.full_name}"
+                if civ_obj.regent and civ_obj.regent['heir_id'] == leader.id:
+                    ruler_title += " (Minor Heir)"
+                elif civ_obj.regent and civ_obj.regent['regent_id'] == leader.id:
+                    ruler_title += " (Regent)"
+                elif leader.reign_start_year > 0:
+                    ruler_title += f" (Ruled from {leader.reign_start_year})"
+                biography.append(f"- {ruler_title}")
+
+        if golden_ages:
+            biography.append(f"\n## Ages of Glory")
+            for age in golden_ages[-3:]:
+                biography.append(f"- {self._event_to_story(age)}")
+        
+        if major_wars:
+            biography.append(f"\n## Trials of War")
+            for war in major_wars[-5:]:
+                biography.append(f"- {self._event_to_story(war)}")
+        
+        recent_events = self.archive.get_recent_events(civilization=civilization, years_back=20, current_year=current_year)
+        if recent_events:
+            biography.append(f"\n## Recent Times")
+            for event in recent_events[-5:]:
+                biography.append(f"- {self._event_to_story(event)}")
+        
+        return "\n".join(biography)
+    
+    def generate_person_biography(self, person_id):
+        """Generate a biography for a single individual"""
+        person = self.world.get_person_by_id(person_id)
+        if not person:
+            return f"The person with ID {person_id} is unknown."
+        
+        events = self.archive.get_person_timeline(person_id)
+        
+        bio = [f"# The Life of {person.full_name}\n"]
+        bio.append(f"**Born:** Year {person.birth_year} in {person.civ_name}")
+        if not person.alive:
+            bio.append(f"**Died:** Year {person.death_year} (Age {person.age}) - {person.cause_of_death}")
+        else:
+            bio.append(f"**Age:** {person.age}")
+            bio.append(f"**Health:** {int(person.health)}/100")
+        
+        bio.append(f"**Dynasty:** {person.dynasty.name if person.dynasty else 'Commoner'}")
+        
+        faction = self.world.get_faction_by_id(person.faction_id) 
+        bio.append(f"**Faction:** {faction.name if faction else 'None'}")
+        
+        bio.append(f"**Profession:** {person.profession}")
+        bio.append(f"**Traits:** {', '.join(person.traits)}")
+        bio.append(f"**Fame:** {int(person.fame)} {'(Hero)' if person.is_hero else ''}")
+
+        if person.goals: 
+            bio.append(f"\n## Personal Goals:")
+            for goal in person.goals:
+                if goal['type'] == 'plot_assassination':
+                    target = self.world.get_person_by_id(goal['target_id'])
+                    bio.append(f"- Plotting to kill {target.name if target else '???'}")
+                else:
+                    bio.append(f"- {goal['type'].replace('_', ' ').title()}")
+
+        bio.append("\n## Key Life Events:")
+        if not events:
+            bio.append("- No significant events recorded.")
+        for event in events:
+            bio.append(f"- {self._event_to_story(event)}")
+            
+        return "\n".join(bio)
+
+"""
+====================== 2. INDIVIDUALS, DYNASTIES & FACTIONS ======================
+"""
+
+class Dynasty:
+    """Represents a noble family or dynasty"""
+    def __init__(self, name, founder, rng=None):
+        self.name = name
+        self.founder_id = founder.id if founder else None
+        self.members = [founder.id] if founder else []
+        self.prestige = 10 
+        self.rng = rng or random.Random()
+    
+    def add_member(self, person):
+        if person.id not in self.members:
+            self.members.append(person.id)
+            person.dynasty = self
+            person.surname = self.name
+    
+    def add_prestige(self, amount):
+        self.prestige += amount
+    
+    def to_dict(self):
+        return {
+            'name': self.name,
+            'founder_id': self.founder_id,
+            'members': self.members,
+            'prestige': self.prestige
+        }
+    
+    @classmethod
+    def from_dict(cls, data, world, rng=None):
+        founder = world.get_person_by_id(data['founder_id'])
+        dynasty = cls(data['name'], founder, rng=rng)
+        dynasty.members = data['members']
+        dynasty.prestige = data['prestige']
+        return dynasty
+
+class Faction: 
+    """Represents a political faction within a civilization"""
+    
+    def __init__(self, id, name, civ_name, ideology, rng=None):
+        self.id = id
+        self.name = name
+        self.civ_name = civ_name
+        self.ideology = ideology 
+        self.rng = rng or random.Random()
+        self.influence = self.rng.randint(10, 30)
+        self.members = [] 
+        self.agenda = [] 
+        
+    def add_member(self, person):
+        if person.id not in self.members:
+            self.members.append(person.id)
+            person.faction_id = self.id
+            
+    def get_leader(self, world):
+        """Get the most powerful living member of the faction"""
+        living_members = [world.get_person_by_id(pid) for pid in self.members if world.get_person_by_id(pid) and world.get_person_by_id(pid).alive]
+        if not living_members:
+            return None
+        return max(living_members, key=lambda p: p.stats['intrigue'] + p.stats['combat'])
+            
+    def update_year(self, world, civ):
+        """Update faction influence and attempt to execute agenda"""
+        
+        # 1. Update Influence
+        influence_change = self.rng.randint(-2, 2)
+        if self.ideology == "Military" and civ.active_wars: 
+            influence_change += 3
+        if self.ideology == "Clergy" and civ.religion and civ.religion.influence > 1.5:
+            influence_change += 1
+        if self.ideology == "Nobility" and civ.stability > 80:
+            influence_change += 1
+            
+        self.influence = max(0, min(100, self.influence + influence_change))
+        
+        # 2. Pursue Agenda
+        if not self.agenda:
+            self._generate_agenda(world, civ)
+            
+        if self.agenda and self.rng.random() < (self.influence / 500.0): # Max 20% chance
+            goal = self.agenda.pop(0)
+            leader = self.get_leader(world)
+            if not leader: return 
+            
+            if goal['type'] == 'start_holy_war':
+                self._agenda_start_holy_war(world, civ, leader)
+            elif goal['type'] == 'install_ruler':
+                self._agenda_install_ruler(world, civ, leader)
+            elif goal['type'] == 'start_war':
+                self._agenda_start_war(world, civ, leader)
+
+    def _generate_agenda(self, world, civ):
+        """Generate a new goal for the faction"""
+        if self.ideology == "Military" and self.influence > 50:
+            self.agenda.append({"type": "start_war"})
+        elif self.ideology == "Clergy" and self.influence > 50 and civ.religion:
+            self.agenda.append({"type": "start_holy_war"})
+        elif self.ideology == "Nobility" and self.influence > 60:
+            leader = self.get_leader(world)
+            current_ruler = civ.get_current_leader(world)
+            if leader and current_ruler and leader.id != current_ruler.id:
+                self.agenda.append({"type": "install_ruler"})
+    
+    def _agenda_start_holy_war(self, world, civ, leader):
+        if not civ.religion: return
+        
+        targets = []
+        for other_civ_name in civ.relations:
+            other_civ = world.get_civ_by_name(other_civ_name)
+            if other_civ and other_civ_name not in civ.active_wars and other_civ.religion and other_civ.religion.name != civ.religion.name:
+                targets.append(other_civ)
+        
+        if targets:
+            target = self.rng.choice(targets)
+            world.declare_war(civ, target, holy=True, declared_by=leader)
+            
+    def _agenda_start_war(self, world, civ, leader):
+        target = None
+        lowest_power = 999
+        for other_civ_name in civ.relations:
+            other_civ = world.get_civ_by_name(other_civ_name)
+            if other_civ and other_civ_name not in civ.active_wars and other_civ.military['war_power'] < lowest_power:
+                lowest_power = other_civ.military['war_power']
+                target = other_civ
+        
+        if target:
+            world.declare_war(civ, target, holy=False, declared_by=leader)
+            
+    def _agenda_install_ruler(self, world, civ, leader):
+        current_leader = civ.get_current_leader(world)
+        if not current_leader or current_leader.id == leader.id:
+            return
+            
+        coup_power = self.influence + leader.stats['intrigue']
+        defence_power = civ.stability + current_leader.stats['intrigue']
+        
+        if coup_power > defence_power * self.rng.uniform(0.8, 1.2):
+            civ.stability = max(10, civ.stability / 2) 
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="faction_coup", civilization=civ.name,
+                details=f"The {self.name} faction, led by {leader.full_name}, overthrew {current_leader.full_name}",
+                person_id=leader.id, severity="catastrophic",
+                caused_by=current_leader.id, rng=self.rng
+            ))
+            
+            if "Cruel" in leader.traits:
+                current_leader.take_damage(100, "assassination during a coup", world)
+            else:
+                current_leader.profession = "Noble" 
+            
+            civ._install_new_ruler(world, leader, current_leader, "factional coup")
+        else:
+            self.influence /= 2 
+            leader.take_damage(self.rng.randint(10, 50), "a failed coup", world)
+            civ.stability -= 10
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="rebellion", civilization=civ.name,
+                details=f"The {self.name} faction led a failed coup, wounding {leader.full_name}",
+                person_id=leader.id, severity="major", rng=self.rng
+            ))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'civ_name': self.civ_name,
+            'ideology': self.ideology,
+            'influence': self.influence,
+            'members': self.members,
+            'agenda': self.agenda
+        }
+
+    @classmethod
+    def from_dict(cls, data, rng=None):
+        faction = cls(data['id'], data['name'], data['civ_name'], data['ideology'], rng=rng)
+        faction.influence = data['influence']
+        faction.members = data['members']
+        faction.agenda = data['agenda']
+        return faction
+
+class Person:
+    """Represents an individual in the world"""
+    
+    PROFESSIONS = ["Ruler", "General", "Scholar", "Diplomat", "Treasurer", "Priest", "Noble", "Commoner"]
+    
+    def __init__(self, civ_name, birth_year, gender=None, dynasty=None, rng=None):
+        self.rng = rng or random.Random()
+        self.id = f"p_{birth_year}_{self.rng.randint(1000, 9999)}"
+        self.alive = True
+        self.civ_name = civ_name
+        
+        self.gender = gender if gender else self.rng.choice(["Male", "Female"])
+        self.name = self.rng.choice(MALE_NAMES) if self.gender == "Male" else self.rng.choice(FEMALE_NAMES)
+        self.surname = "the Commoner"
+        self.dynasty = None
+        if dynasty:
+            dynasty.add_member(self)
+        self.full_name = f"{self.name} {self.surname}"
+        
+        self.birth_year = birth_year
+        self.age = 0
+        self.health = 100 
+        self.cause_of_death = "natural causes"
+        self.death_year = -1
+        
+        self.mother_id = None
+        self.father_id = None
+        self.spouse_id = None
+        self.children_ids = []
+        
+        self.profession = "Commoner"
+        self.faction_id = None 
+        self.goals = [] 
+        self.traits = self.rng.sample(TRAITS, self.rng.randint(2, 4))
+        self.stats = self._generate_stats()
+        self.loyalty = self.rng.randint(30, 70) 
+        self.fame = 0
+        self.is_hero = False
+        
+        self.reign_start_year = -1
+        self.major_achievements = []
+
+    def _generate_stats(self):
+        """Generate base stats, modified by traits"""
+        stats = {
+            "combat": self.rng.randint(1, 10),
+            "diplomacy": self.rng.randint(1, 10),
+            "stewardship": self.rng.randint(1, 10),
+            "intrigue": self.rng.randint(1, 10),
+            "learning": self.rng.randint(1, 10),
+            "piety": self.rng.randint(1, 10),
+            "vitality": self.rng.randint(0, 10) 
+        }
+        
+        if "Brave" in self.traits: stats["combat"] += 3
+        if "Cowardly" in self.traits: stats["combat"] -= 3
+        if "Genius" in self.traits:
+            stats["learning"] += 4
+            stats["stewardship"] += 2
+        if "Dull" in self.traits: stats["learning"] -= 4
+        if "Kind" in self.traits: stats["diplomacy"] += 3
+        if "Cruel" in self.traits: stats["intrigue"] += 3
+        if "Honest" in self.traits: stats["diplomacy"] += 2
+        if "Deceitful" in self.traits: stats["intrigue"] += 4
+        if "Pious" in self.traits: stats["piety"] += 5
+        if "Cynical" in self.traits: stats["piety"] -= 4
+        if "Ambitious" in self.traits: stats["intrigue"] += 2
+        if "Robust" in self.traits: stats["vitality"] += 5
+        if "Sickly" in self.traits: stats["vitality"] -= 5
+        
+        for stat, value in stats.items():
+            stats[stat] = max(0, min(20, value))
+        return stats
+
+    def update_year(self, world):
+        """Update the person's state for one year"""
+        if not self.alive:
+            return
+        
+        self.age += 1
+        
+        # --- Health & Death System ---
+        health_loss = 0
+        if self.age > 60: health_loss = (self.age - 60) / 10.0 
+        elif self.age > 30: health_loss = (self.age - 30) / 30.0 
+        
+        vitality_mod = (10.0 - self.stats["vitality"]) / 5.0 
+        final_loss = self.rng.uniform(0.5, 1.5) * health_loss * vitality_mod
+        
+        if final_loss > 0:
+            self.take_damage(final_loss, "natural causes", world)
+            if not self.alive: return 
+        
+        self._check_for_disease(world)
+        if not self.alive: return
+
+        # --- Adulthood, Profession & Faction ---
+        if self.age == 16:
+            if self.dynasty: 
+                self.profession = self.rng.choice(["General", "Diplomat", "Treasurer", "Priest", "Scholar", "Noble"])
+                civ = world.get_civ_by_name(self.civ_name)
+                if self.profession == "General":
+                    civ.get_faction("Military").add_member(self)
+                elif self.profession == "Priest":
+                    civ.get_faction("Clergy").add_member(self)
+                else:
+                    civ.get_faction("Nobility").add_member(self)
+
+        # --- Goals ---
+        self._update_goals(world)
+        self._pursue_goals(world)
+        if not self.alive: return
+
+        # --- Marriage & Children ---
+        if self.age > 18 and not self.spouse_id and self.dynasty and self.rng.random() < 0.1:
+            self._find_spouse(world)
+            
+        if self.age > 20 and self.age < 45 and self.spouse_id and self.gender == "Female" and self.rng.random() < 0.15:
+            self._have_child(world)
+    
+    def _check_for_disease(self, world):
+        if self.rng.random() < 0.02: 
+            disease_name = self.rng.choice(["The Red Plague", "Wasting Sickness", "River Fever"])
+            severity = self.rng.randint(5, 30) 
+            resist_mod = self.stats["vitality"] / 20.0 
+            damage = max(1, severity * (1.0 - resist_mod))
+            self.take_damage(damage, disease_name, world)
+
+    def _update_goals(self, world):
+        """Generate new goals based on traits"""
+        if self.goals or self.rng.random() > 0.1: 
+            return
+            
+        if "Ambitious" in self.traits and self.stats["intrigue"] > 10:
+            civ = world.get_civ_by_name(self.civ_name)
+            rival = None
+            if self.faction_id:
+                faction = world.get_faction_by_id(self.faction_id)
+                candidates = [world.get_person_by_id(pid) for pid in faction.members if pid != self.id and world.get_person_by_id(pid) and world.get_person_by_id(pid).alive]
+                if candidates:
+                    rival = self.rng.choice(candidates)
+
+            if rival and rival.alive:
+                self.goals.append({"type": "plot_assassination", "target_id": rival.id})
+        
+        elif "Pious" in self.traits and self.stats["piety"] > 12:
+            self.goals.append({"type": "sponsor_festival"})
+
+    def _pursue_goals(self, world):
+        """Act on the first goal in the list"""
+        if not self.goals:
+            return
+            
+        goal = self.goals[0]
+        
+        if goal['type'] == 'plot_assassination':
+            if self.rng.random() < (self.stats["intrigue"] / 50.0): 
+                target = world.get_person_by_id(goal['target_id'])
+                if target and target.alive:
+                    target.take_damage(100, "assassination", world)
+                    world.history_archive.record_event(HistoryEvent(
+                        year=world.year, event_type="assassination", civilization=self.civ_name,
+                        details=f"was assassinated by a political rival",
+                        person_id=target.id, severity="major",
+                        caused_by=self.id, rng=self.rng
+                    ))
+                    self.add_fame(5, world, "a successful plot")
+                self.goals.pop(0) 
+            elif self.rng.random() < 0.1: 
+                self.goals.pop(0)
+
+        elif goal['type'] == 'sponsor_festival':
+            if self.rng.random() < 0.2:
+                civ = world.get_civ_by_name(self.civ_name)
+                civ._trigger_festival(world, f"sponsored by {self.full_name}")
+                self.add_fame(10, world, "sponsoring a grand festival")
+                self.goals.pop(0)
+
+    def take_damage(self, amount, reason, world):
+        if not self.alive: return
+        self.health -= amount
+        if self.health <= 0:
+            self.health = 0
+            self.cause_of_death = reason
+            self.die(world)
+    
+    def die(self, world):
+        if not self.alive: return
+        
+        self.alive = False
+        self.death_year = world.year
+        
+        details = f"died at age {self.age} of {self.cause_of_death}"
+        event_type = "death"
+        if self.cause_of_death == "assassination":
+            event_type = "assassination"
+            details = f"was assassinated at age {self.age}"
+        elif self.is_hero:
+            details = f"the hero {self.full_name}, {details}"
+        
+        world.history_archive.record_event(HistoryEvent(
+            year=world.year, event_type=event_type, civilization=self.civ_name,
+            details=details, person_id=self.id,
+            severity="major" if self.fame > 50 or self.profession == "Ruler" else "normal",
+            rng=self.rng
+        ))
+        
+        if self.dynasty:
+            living_members = [m for m in self.dynasty.members if world.get_person_by_id(m) and world.get_person_by_id(m).alive]
+            if not living_members:
+                world.history_archive.record_event(HistoryEvent(
+                    year=world.year, event_type="dynasty_ended", civilization=self.civ_name,
+                    details=f"The {self.dynasty.name} dynasty has died out",
+                    person_id=self.id, severity="major", rng=self.rng
+                ))
+    
+    def _find_spouse(self, world):
+        civ = world.get_civ_by_name(self.civ_name)
+        candidates = []
+        for person in civ.individuals:
+            if (person.alive and person.dynasty and not person.spouse_id and
+                person.age > 18 and person.age < 50 and person.gender != self.gender):
+                candidates.append(person)
+        
+        if candidates:
+            spouse = self.rng.choice(candidates)
+            self.spouse_id = spouse.id
+            spouse.spouse_id = self.id
+            
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="marriage", civilization=self.civ_name,
+                details=f"{self.full_name} married {spouse.full_name}",
+                person_id=self.id, severity="normal", rng=self.rng
+            ))
+            
+    def _have_child(self, world):
+        civ = world.get_civ_by_name(self.civ_name)
+        child = Person(self.civ_name, world.year, dynasty=self.dynasty, rng=self.rng)
+        child.mother_id = self.id
+        child.father_id = self.spouse_id
+        
+        world.all_people[child.id] = child
+        civ.individuals.append(child)
+        
+        self.children_ids.append(child.id)
+        spouse = world.get_person_by_id(self.spouse_id)
+        if spouse:
+            spouse.children_ids.append(child.id)
+            
+        world.history_archive.record_event(HistoryEvent(
+            year=world.year, event_type="birth", civilization=self.civ_name,
+            details=f"a child named {child.name} was born to {self.full_name} and {spouse.full_name}",
+            person_id=child.id, severity="normal", rng=self.rng
+        ))
+
+    def get_profession_modifiers(self):
+        mods = defaultdict(float)
+        if self.profession == "Ruler":
+            mods["diplomacy_bonus"] += self.stats["diplomacy"] * 0.01
+            mods["tech_bonus"] += self.stats["learning"] * 0.01
+            mods["trade_bonus"] += self.stats["stewardship"] * 0.01
+            mods["stability_bonus"] += (self.stats["diplomacy"] + self.stats["intrigue"]) * 0.005
+        elif self.profession == "General":
+            mods["war_power_bonus"] = self.stats["combat"] * 0.05 
+        elif self.profession == "Diplomat":
+            mods["diplomacy_bonus"] = self.stats["diplomacy"] * 0.05
+        elif self.profession == "Treasurer":
+            mods["trade_bonus"] = self.stats["stewardship"] * 0.05
+        elif self.profession == "Scholar":
+            mods["tech_bonus"] = self.stats["learning"] * 0.05
+        elif self.profession == "Priest":
+            mods["religion_spread_bonus"] = self.stats["piety"] * 0.05
+            mods["stability_bonus"] = self.stats["piety"] * 0.02
+        elif self.profession == "Noble":
+            mods["stability_bonus"] = 0.1 
+        return mods
+
+    def add_fame(self, amount, world, reason=""):
+        old_fame = self.fame
+        self.fame += amount
+        
+        if not self.is_hero and self.fame >= 50 and old_fame < 50:
+            self.is_hero = True
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="hero_achievement", civilization=self.civ_name,
+                details=f"became a hero through {reason}",
+                person_id=self.id, severity="major", rng=self.rng
+            ))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'alive': self.alive,
+            'civ_name': self.civ_name,
+            'gender': self.gender,
+            'name': self.name,
+            'surname': self.surname,
+            'full_name': self.full_name,
+            'birth_year': self.birth_year,
+            'age': self.age,
+            'health': self.health,
+            'cause_of_death': self.cause_of_death,
+            'death_year': self.death_year,
+            'mother_id': self.mother_id,
+            'father_id': self.father_id,
+            'spouse_id': self.spouse_id,
+            'children_ids': self.children_ids,
+            'profession': self.profession,
+            'faction_id': self.faction_id, 
+            'goals': self.goals, 
+            'traits': self.traits,
+            'stats': self.stats,
+            'loyalty': self.loyalty,
+            'fame': self.fame,
+            'is_hero': self.is_hero,
+            'reign_start_year': self.reign_start_year,
+            'major_achievements': self.major_achievements
+        }
+    
+    @classmethod
+    def from_dict(cls, data, world, rng=None):
+        person = cls(data['civ_name'], data['birth_year'], gender=data['gender'], rng=rng)
+        person.id = data['id']
+        person.alive = data['alive']
+        person.name = data['name']
+        person.surname = data['surname']
+        person.full_name = data['full_name']
+        person.age = data['age']
+        person.health = data.get('health', 100)
+        person.cause_of_death = data.get('cause_of_death', 'natural causes')
+        person.death_year = data['death_year']
+        person.mother_id = data['mother_id']
+        person.father_id = data['father_id']
+        person.spouse_id = data['spouse_id']
+        person.children_ids = data['children_ids']
+        person.profession = data['profession']
+        person.faction_id = data.get('faction_id') 
+        person.goals = data.get('goals', []) 
+        person.traits = data['traits']
+        person.stats = data['stats']
+        person.loyalty = data['loyalty']
+        person.fame = data['fame']
+        person.is_hero = data['is_hero']
+        person.reign_start_year = data['reign_start_year']
+        person.major_achievements = data['major_achievements']
+        return person
+
+"""
+====================== 3. CIVILIZATION & RELIGION ======================
+"""
+
+class Religion:
+    """Represents a religion with beliefs and influence"""
+    
+    def __init__(self, name, civ_name, year_founded, rng=None):
+        self.name = name
+        self.civ_name = civ_name
+        self.year_founded = year_founded
+        self.founder_id = None
+        self.beliefs = []
+        self.influence = 1.0
+        self.holy_sites = []
+        self.rng = rng or random.Random()
+        
+        belief_options = ["Monotheism", "Polytheism", "Ancestor Worship", "Nature Worship",
+                         "Sun Worship", "Moon Worship", "Animal Worship", "Spirit Worship",
+                         "Proselytizing", "Isolationist", "Militant", "Pacifist"]
+        self.beliefs = self.rng.sample(belief_options, self.rng.randint(2, 4))
+    
+    def to_dict(self):
+        return {
+            'name': self.name,
+            'civ_name': self.civ_name,
+            'year_founded': self.year_founded,
+            'founder_id': self.founder_id,
+            'beliefs': self.beliefs,
+            'influence': self.influence,
+            'holy_sites': self.holy_sites
+        }
+    
+    @classmethod
+    def from_dict(cls, data, rng=None):
+        religion = cls(data['name'], data['civ_name'], data['year_founded'], rng=rng)
+        religion.founder_id = data['founder_id']
+        religion.beliefs = data['beliefs']
+        religion.influence = data['influence']
+        religion.holy_sites = data['holy_sites']
+        return religion
+
+class Civilization:
+    """Represents a civilization with culture, technology, and individuals"""
+    
+    def __init__(self, name, world_year, rng=None):
+        self.rng = rng or random.Random()
+        self.name = name
+        self.year_founded = world_year
+        self.leader_history = []  
+        self.dynasties = []
+        self.factions = []
+        self.individuals = []
+        self.regent = None # {"regent_id": pid, "heir_id": pid, "end_year": y}
+        self.religion = None
+        self.culture = self._generate_culture()
+        self.technology = self._initialize_technology()
+        self.economy = self._initialize_economy()
+        self.military = self._initialize_military()
+        self.diplomacy = {}
+        self.relations = {}
+        self.active_wars = {} # {"Zanthar": {"type": "holy"}}
+        self.stability = 75
+        self.population = self.rng.randint(5000, 15000)
+        self.territory = []
+        self.known_civs = []
+        
+        self._initialize_factions()
+        
+        founder = Person(name, world_year, dynasty=None, rng=self.rng)
+        founder.profession = "Ruler"
+        founder.reign_start_year = world_year
+        
+        dynasty_name = self._generate_dynasty_name()
+        dynasty = Dynasty(dynasty_name, founder, rng=self.rng)
+        self.dynasties.append(dynasty)
+        founder.surname = dynasty_name
+        founder.full_name = f"{founder.name} {dynasty_name}"
+        
+        self.leader_history.append(founder)
+        self.individuals.append(founder)
+        
+        self.get_faction("Nobility").add_member(founder)
+        
+        for _ in range(self.rng.randint(3, 6)):
+            noble = Person(name, world_year, dynasty=dynasty, rng=self.rng)
+            noble.profession = self.rng.choice(["General", "Diplomat", "Treasurer", "Priest", "Scholar", "Noble"])
+            
+            if noble.profession == "General":
+                self.get_faction("Military").add_member(noble)
+            elif noble.profession == "Priest":
+                self.get_faction("Clergy").add_member(noble)
+            else:
+                self.get_faction("Nobility").add_member(noble)
+                
+            self.individuals.append(noble)
+        
+        for _ in range(self.rng.randint(10, 20)):
+            commoner = Person(name, world_year, rng=self.rng)
+            self.individuals.append(commoner)
+    
+    def _initialize_factions(self):
+        self.factions.append(Faction(f"{self.name}_nobility", "Nobility", self.name, "Nobility", rng=self.rng))
+        self.factions.append(Faction(f"{self.name}_clergy", "Clergy", self.name, "Clergy", rng=self.rng))
+        self.factions.append(Faction(f"{self.name}_military", "Military", self.name, "Military", rng=self.rng))
+
+    def get_faction(self, ideology):
+        for f in self.factions:
+            if f.ideology == ideology:
+                return f
+        return None
+
+    def _generate_culture(self):
+        culture_aspects = ["Honor", "Wealth", "Knowledge", "Strength", "Faith", "Freedom", "Tradition"]
+        primary = self.rng.choice(culture_aspects)
+        secondary = self.rng.choice([a for a in culture_aspects if a != primary])
+        return {"primary": primary, "secondary": secondary}
+    
+    def _generate_dynasty_name(self):
+        prefix = self.rng.choice(DYNASTY_PREFIXES)
+        suffix = self.rng.choice(DYNASTY_SUFFIXES)
+        return prefix + suffix
+    
+    def _initialize_technology(self):
+        return {
+            "agriculture": self.rng.randint(1, 3),
+            "metalworking": self.rng.randint(1, 3),
+            "writing": self.rng.randint(0, 2),
+            "masonry": self.rng.randint(1, 3),
+            "military_tactics": self.rng.randint(1, 3),
+            "naval": self.rng.randint(0, 2),
+            "trade": self.rng.randint(1, 3),
+            "magic": 0 
+        }
+    
+    def _initialize_economy(self):
+        return {
+            "food": self.rng.randint(50, 100),
+            "gold": self.rng.randint(50, 100),
+            "production": self.rng.randint(50, 100),
+            "trade": self.rng.randint(20, 50)
+        }
+    
+    def _initialize_military(self):
+        return {
+            "army_size": self.rng.randint(500, 1500),
+            "navy_size": 0,
+            "war_power": self.rng.randint(30, 70),
+            "fortifications": self.rng.randint(10, 30)
+        }
+    
+    def get_current_leader(self, world):
+        """Get the current ruling Person object (could be a Regent)"""
+        if not self.leader_history:
+            return None
+            
+        if self.regent:
+            regent_person = world.get_person_by_id(self.regent['regent_id'])
+            if regent_person and regent_person.alive:
+                return regent_person
+            else:
+                # Regent died, handle succession
+                self._handle_leader_succession(world)
+                if self.regent: # If new regent was found
+                    return world.get_person_by_id(self.regent['regent_id'])
+
+        leader_person = self.leader_history[-1]
+        if leader_person.alive:
+            return leader_person
+        
+        # Leader is dead, but no regency
+        self._handle_leader_succession(world)
+        return self.get_current_leader(world) # Recursive call to get new leader
+    
+    def update_year(self, world):
+        """Update the civilization for one year"""
+        
+        if self.regent and world.year >= self.regent['end_year']:
+            self._end_regency(world)
+            
+        current_leader = self.get_current_leader(world)
+        if not current_leader:
+             # Civ has collapsed, no one to update
+             return
+        
+        for person in self.individuals[:]:
+            person.update_year(world)
+            if not person.alive and person in self.individuals:
+                self.individuals.remove(person)
+        
+        for faction in self.factions:
+            faction.update_year(world, self)
+
+        if not current_leader.alive:
+            self._handle_leader_succession(world)
+            current_leader = self.get_current_leader(world) 
+        
+        self._apply_profession_bonuses(current_leader)
+        self._update_technology(world)
+        self._update_economy(world)
+        self._update_stability(world)
+        self._update_population(world)
+        self._update_military(world)
+        self._update_diplomacy(world)
+        self._random_events(world)
+    
+    def _end_regency(self, world):
+        """The heir comes of age and the regency ends."""
+        if not self.regent: return
+
+        heir = world.get_person_by_id(self.regent['heir_id'])
+        regent = world.get_person_by_id(self.regent['regent_id'])
+        
+        if not heir or not heir.alive:
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="death", civilization=self.name,
+                details=f"The heir {heir.full_name if heir else '??'} died during the regency.",
+                person_id=self.regent['heir_id'], severity="major", rng=self.rng
+            ))
+            self.regent = None
+            self._handle_leader_succession(world) 
+            return
+            
+        world.history_archive.record_event(HistoryEvent(
+            year=world.year, event_type="succession", civilization=self.name,
+            details=f"{heir.full_name} comes of age, ending the regency of {regent.full_name if regent else '??'}",
+            person_id=heir.id, severity="major",
+            caused_by=regent.id if regent else None, rng=self.rng
+        ))
+        
+        heir.profession = "Ruler"
+        heir.reign_start_year = world.year
+        self.leader_history.append(heir) 
+        
+        if regent:
+            regent.profession = "Noble" 
+        self.regent = None
+        
+    def _handle_leader_succession(self, world):
+        """Handle the death of a leader and succession"""
+        
+        # Check if a Regent died
+        if self.regent and (not world.get_person_by_id(self.regent['regent_id']).alive):
+            old_regent = world.get_person_by_id(self.regent['regent_id'])
+            old_regent_name = old_regent.full_name if old_regent else "The Regent"
+            
+            new_regent = self._find_regent(world)
+            if new_regent:
+                self.regent['regent_id'] = new_regent.id
+                new_regent.profession = "Ruler" # Give them the title
+                world.history_archive.record_event(HistoryEvent(
+                    year=world.year, event_type="regency_start", civilization=self.name,
+                    details=f"Regent {old_regent_name} died. {new_regent.full_name} takes over the regency.",
+                    person_id=new_regent.id, severity="major", rng=self.rng
+                ))
+            else:
+                self.regent = None # Crisis
+        
+        if not self.leader_history: return 
+        old_leader = self.leader_history[-1]
+        
+        successor = self._find_heir(world, old_leader)
+        
+        if successor:
+            if successor.age < 16:
+                regent = self._find_regent(world)
+                if not regent:
+                    self._install_new_ruler(world, successor, old_leader, "child rule (no regent)")
+                else:
+                    self.regent = {
+                        "regent_id": regent.id,
+                        "heir_id": successor.id,
+                        "end_year": world.year + (16 - successor.age)
+                    }
+                    self.leader_history.append(successor) 
+                    regent.profession = "Ruler"
+                    
+                    world.history_archive.record_event(HistoryEvent(
+                        year=world.year, event_type="regency_start", civilization=self.name,
+                        details=f"{regent.full_name} begins a regency for the child-heir {successor.full_name}",
+                        person_id=regent.id, severity="major",
+                        caused_by=old_leader.id, rng=self.rng
+                    ))
+            else:
+                self._install_new_ruler(world, successor, old_leader, "dynastic succession")
+        else:
+            new_ruler = self._find_faction_ruler(world)
+            if new_ruler:
+                self._install_new_ruler(world, new_ruler, old_leader, "factional election")
+            else:
+                world.history_archive.record_event(HistoryEvent(
+                    year=world.year, event_type="civil_war", civilization=self.name,
+                    details="civil war erupted after the death of the ruler with no clear successor",
+                    severity="catastrophic", rng=self.rng
+                ))
+                self.stability -= 50
+
+    def _find_heir(self, world, old_leader):
+        """Find the dynastic heir"""
+        if not old_leader.dynasty: return None # No dynasty to inherit from
+        dynasty_members = [p for p in self.individuals if p.dynasty == old_leader.dynasty and p.alive and p != old_leader]
+        if not dynasty_members:
+            return None
+            
+        children = [p for p in dynasty_members if p.mother_id == old_leader.id or p.father_id == old_leader.id]
+        if children:
+            return max(children, key=lambda x: x.age) 
+            
+        siblings = [p for p in dynasty_members if p.mother_id == old_leader.mother_id and p.father_id == old_leader.father_id and p.mother_id is not None]
+        if siblings:
+            return max(siblings, key=lambda x: x.age)
+        
+        return self.rng.choice(dynasty_members)
+
+    def _find_regent(self, world):
+        """Find the most powerful person to be regent"""
+        if not self.factions:
+            return None
+        strongest_faction = max(self.factions, key=lambda f: f.influence)
+        return strongest_faction.get_leader(world)
+
+    def _find_faction_ruler(self, world):
+        """When no heir exists, factions try to install a ruler"""
+        strongest_faction = max(self.factions, key=lambda f: f.influence)
+        new_ruler = strongest_faction.get_leader(world)
+        if new_ruler:
+            for f in self.factions:
+                if f != strongest_faction and self.rng.random() < (f.influence / 100.0):
+                    self.stability -= 20 
+                    break
+        return new_ruler
+
+    def _install_new_ruler(self, world, successor, old_leader, succession_type):
+        """Central function to finalize a new ruler"""
+        successor.profession = "Ruler"
+        successor.reign_start_year = world.year
+        self.leader_history.append(successor)
+        self.regent = None 
+        
+        world.history_archive.record_event(HistoryEvent(
+            year=world.year, event_type="succession", civilization=self.name,
+            details=f"{successor.full_name} became ruler through {succession_type}",
+            person_id=successor.id, severity="major",
+            caused_by=old_leader.id if old_leader else None, rng=self.rng
+        ))
+        successor.add_fame(20, world, "becoming ruler")
+    
+    def _apply_profession_bonuses(self, current_leader):
+        self.tech_bonus = 0
+        self.war_power_bonus = 0
+        self.diplomacy_bonus = 0
+        self.trade_bonus = 0
+        self.religion_spread_bonus = 0
+        self.stability_bonus = 0
+        
+        for person in self.individuals:
+            if person.alive:
+                mods = person.get_profession_modifiers()
+                for bonus_type, value in mods.items():
+                    if bonus_type == "tech_bonus": self.tech_bonus += value
+                    elif bonus_type == "war_power_bonus": self.war_power_bonus += value
+                    elif bonus_type == "diplomacy_bonus": self.diplomacy_bonus += value
+                    elif bonus_type == "trade_bonus": self.trade_bonus += value
+                    elif bonus_type == "religion_spread_bonus": self.religion_spread_bonus += value
+                    elif bonus_type == "stability_bonus": self.stability_bonus += value
+        
+        if current_leader:
+            leader_mods = current_leader.get_profession_modifiers()
+            for bonus_type, value in leader_mods.items():
+                if bonus_type == "tech_bonus": self.tech_bonus += value
+                elif bonus_type == "war_power_bonus": self.war_power_bonus += value
+                elif bonus_type == "diplomacy_bonus": self.diplomacy_bonus += value
+                elif bonus_type == "trade_bonus": self.trade_bonus += value
+                elif bonus_type == "religion_spread_bonus": self.religion_spread_bonus += value
+                elif bonus_type == "stability_bonus": self.stability_bonus += value
+    
+    def _update_technology(self, world):
+        base_research = 1.0
+        research_points = base_research + self.tech_bonus
+        
+        for tech in self.technology:
+            if self.rng.random() < 0.3: 
+                self.technology[tech] += research_points * self.rng.uniform(0.1, 0.3)
+        
+        for tech, level in self.technology.items():
+            if level >= 5 and (level - research_points * 0.2) < 5:
+                world.history_archive.record_event(HistoryEvent(
+                    year=world.year, event_type="technology_breakthrough", civilization=self.name,
+                    details=f"made a breakthrough in {tech.replace('_', ' ')}",
+                    severity="major", rng=self.rng
+                ))
+                scholars = [p for p in self.individuals if p.profession == "Scholar" and p.alive]
+                for scholar in scholars:
+                    scholar.add_fame(10, world, f"breakthrough in {tech}")
+    
+    def _update_economy(self, world):
+        self.economy["food"] += self.technology["agriculture"] * 10
+        self.economy["gold"] += self.technology["trade"] * 5
+        self.economy["production"] += self.technology["metalworking"] * 5
+        
+        trade_gain = self.economy["trade"] * (1.0 + self.trade_bonus)
+        self.economy["gold"] += trade_gain
+        
+        if self.rng.random() < 0.05:
+            if self.rng.random() < 0.5:
+                boom_amount = self.rng.randint(20, 50)
+                self.economy["gold"] += boom_amount
+                world.history_archive.record_event(HistoryEvent(
+                    year=world.year, event_type="economic_boom", civilization=self.name,
+                    details=f"experienced an economic boom, gaining {boom_amount} gold",
+                    severity="normal", rng=self.rng
+                ))
+            else:
+                crisis_amount = self.rng.randint(10, 30)
+                self.economy["gold"] = max(0, self.economy["gold"] - crisis_amount)
+                world.history_archive.record_event(HistoryEvent(
+                    year=world.year, event_type="economic_crisis", civilization=self.name,
+                    details=f"suffered an economic crisis, losing {crisis_amount} gold",
+                    severity="normal", rng=self.rng
+                ))
+    
+    def _update_stability(self, world):
+        change = 0
+        if self.economy["food"] < 20: change -= 10
+        elif self.economy["food"] > 80: change += 5
+        if self.economy["gold"] < 20: change -= 5
+        elif self.economy["gold"] > 80: change += 3
+        
+        change += self.stability_bonus * 100
+        
+        if self.active_wars: change -= 5 
+        if self.regent: change -= 10 
+        
+        if self.rng.random() < 0.1:
+            change += self.rng.randint(-15, 15)
+        
+        self.stability = max(0, min(100, self.stability + change))
+        
+        if self.stability < 20 and self.rng.random() < 0.2:
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="rebellion", civilization=self.name,
+                details="faced rebellion due to instability", severity="major", rng=self.rng
+            ))
+            self.stability = 10 
+        elif change > 20:
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="golden_age", civilization=self.name,
+                details="entered a golden age of stability and prosperity",
+                severity="major", rng=self.rng
+            ))
+    
+    def _update_population(self, world):
+        growth_rate = 0.01 
+        if self.economy["food"] > 50: growth_rate += 0.005
+        elif self.economy["food"] < 20: growth_rate -= 0.01
+        if self.stability > 70: growth_rate += 0.005
+        elif self.stability < 30: growth_rate -= 0.01
+        
+        self.population = int(self.population * (1 + growth_rate))
+        
+        if growth_rate > 0.02:
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="population_boom", civilization=self.name,
+                details=f"experienced rapid population growth to {self.population} people",
+                severity="normal", rng=self.rng
+            ))
+        elif growth_rate < -0.01:
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="population_collapse", civilization=self.name,
+                details=f"suffered population decline to {self.population} people",
+                severity="major", rng=self.rng
+            ))
+    
+    def _update_military(self, world):
+        self.military["army_size"] = int(self.population * 0.1)
+        self.military["war_power"] = min(100, self.military["war_power"] + self.war_power_bonus)
+        
+        for enemy_name in list(self.active_wars.keys()):
+            enemy = world.get_civ_by_name(enemy_name)
+            if not enemy:
+                del self.active_wars[enemy_name]
+                continue
+            
+            if self.rng.random() < 0.3: 
+                world.simulate_battle(self, enemy)
+            
+            if self.rng.random() < 0.1: 
+                world.make_peace(self, enemy)
+                
+    
+    def _update_diplomacy(self, world):
+        relation_change = self.diplomacy_bonus * 10
+        
+        for civ_name in self.relations:
+            if civ_name in self.active_wars: continue 
+            
+            self.relations[civ_name] = max(-100, min(100, self.relations[civ_name] + relation_change))
+            
+            if self.rng.random() < 0.05:
+                if self.relations[civ_name] > 50:
+                    world.history_archive.record_event(HistoryEvent(
+                        year=world.year, event_type="diplomatic_alliance", civilization=self.name,
+                        details=f"strengthened alliance with {civ_name}",
+                        other_civ=civ_name, severity="normal", rng=self.rng
+                    ))
+                elif self.relations[civ_name] < -50:
+                    if self.rng.random() < 0.1:
+                        world.declare_war(self, world.get_civ_by_name(civ_name), holy=False, declared_by=self.get_current_leader(world))
+    
+    def _random_events(self, world):
+        if not self.religion and self.rng.random() < 0.1:
+            self._found_religion(world)
+        
+        elif self.religion and self.rng.random() < 0.05:
+            self._religious_event(world)
+    
+    def _trigger_festival(self, world, reason=""):
+        self.stability = min(100, self.stability + 5)
+        world.history_archive.record_event(HistoryEvent(
+            year=world.year, event_type="festival", civilization=self.name,
+            details=f"a grand festival was held, {reason}",
+            person_id=self.get_current_leader(world).id,
+            severity="normal", rng=self.rng
+        ))
+
+    def _found_religion(self, world):
+        religion_names = ["Path of Light", "Circle of Stone", "Eternal Flame", "Voice of Wind",
+                         "Order of the Sky", "Cult of the Earth", "Way of Balance", "Sect of Stars"]
+        religion_name = self.rng.choice(religion_names)
+        
+        self.religion = Religion(religion_name, self.name, world.year, rng=self.rng)
+        
+        founder = next((p for p in self.individuals if p.profession in ["Priest", "Scholar"] and p.alive), None)
+        if not founder:
+            living_individuals = [p for p in self.individuals if p.alive]
+            if living_individuals:
+                founder = self.rng.choice(living_individuals)
+            else:
+                return
+        
+        self.religion.founder_id = founder.id
+        founder.add_fame(25, world, "founding a religion")
+        
+        world.history_archive.record_event(HistoryEvent(
+            year=world.year, event_type="religion_founded", civilization=self.name,
+            details=f"founded the {religion_name} religion",
+            person_id=founder.id, severity="major", rng=self.rng
+        ))
+    
+    def _religious_event(self, world):
+        event_type = self.rng.choice(["schism", "reformation", "pilgrimage"])
+        
+        if event_type == "schism":
+            new_religion_name = f"New {self.religion.name}"
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="religious_schism", civilization=self.name,
+                details=f"the {self.religion.name} split, forming the {new_religion_name}",
+                severity="major", rng=self.rng
+            ))
+        elif event_type == "reformation":
+            world.history_archive.record_event(HistoryEvent(
+                year=world.year, event_type="religious_reformation", civilization=self.name,
+                details=f"the {self.religion.name} underwent major reforms",
+                severity="normal", rng=self.rng
+            ))
+        elif event_type == "pilgrimage":
+            living_individuals = [p for p in self.individuals if p.alive]
+            if living_individuals:
+                pilgrim = self.rng.choice(living_individuals)
+                pilgrim.add_fame(5, world, "religious pilgrimage")
+                world.history_archive.record_event(HistoryEvent(
+                    year=world.year, event_type="pilgrimage", civilization=self.name,
+                    details=f"made a pilgrimage to a holy site",
+                    person_id=pilgrim.id, severity="normal", rng=self.rng
+                ))
+    
+    def display_status(self, world):
+        """Display a one-line summary for the world status"""
+        leader = self.get_current_leader(world)
+        if not leader:
+            print(f"**{self.name}** - --- CIVILIZATION COLLAPSED ---")
+            return
+
+        leader_name = leader.full_name
+        if self.regent:
+            heir = world.get_person_by_id(self.regent['heir_id'])
+            leader_name = f"Regent {leader_name} (for {heir.name if heir else '...'})"
+
+        war_status = "At Peace"
+        if self.active_wars:
+            war_status = f"WAR ({', '.join(self.active_wars.keys())})"
+
+        print(f"**{self.name}** | Pop: {self.population} | Stability: {int(self.stability)}% | Ruler: {leader_name} | {war_status}")
+
+    def to_dict(self):
+        return {
+            'name': self.name,
+            'year_founded': self.year_founded,
+            'leader_history': [p.id for p in self.leader_history],
+            'dynasties': [dynasty.to_dict() for dynasty in self.dynasties],
+            'factions': [faction.to_dict() for faction in self.factions], 
+            'individuals': [person.to_dict() for person in self.individuals],
+            'regent': self.regent,
+            'religion': self.religion.to_dict() if self.religion else None,
+            'culture': self.culture,
+            'technology': self.technology,
+            'economy': self.economy,
+            'military': self.military,
+            'diplomacy': self.diplomacy,
+            'relations': self.relations,
+            'active_wars': self.active_wars,
+            'stability': self.stability,
+            'population': self.population,
+            'territory': self.territory,
+            'known_civs': self.known_civs
+        }
+    
+    @classmethod
+    def from_dict(cls, data, world, rng=None):
+        civ = cls(data['name'], data['year_founded'], rng=rng)
+        
+        civ.individuals = []
+        civ.dynasties = []
+        civ.factions = [] 
+        civ.leader_history = []
+        
+        civ.individuals = [Person.from_dict(p, world, rng=rng) for p in data['individuals']]
+        for p in civ.individuals:
+            world.all_people[p.id] = p
+            
+        civ.dynasties = [Dynasty.from_dict(d, world, rng=rng) for d in data['dynasties']]
+        
+        civ.factions = [Faction.from_dict(f, rng=rng) for f in data.get('factions', [])]
+        for f in civ.factions:
+            world.all_factions[f.id] = f
+
+        for p in civ.individuals:
+            for d in civ.dynasties:
+                if p.id in d.members:
+                    p.dynasty = d
+                    break
+            if p.faction_id:
+                faction = world.get_faction_by_id(p.faction_id)
+                if faction and p.id not in faction.members:
+                    faction.members.append(p.id)
+        
+        leader_ids = data['leader_history']
+        civ.leader_history = [world.get_person_by_id(pid) for pid in leader_ids if world.get_person_by_id(pid)]
+        
+        civ.regent = data.get('regent') 
+        civ.religion = Religion.from_dict(data['religion'], rng=rng) if data['religion'] else None
+        civ.culture = data['culture']
+        civ.technology = data['technology']
+        civ.economy = data['economy']
+        civ.military = data['military']
+        civ.diplomacy = data['diplomacy']
+        civ.relations = data['relations']
+        civ.active_wars = data.get('active_wars', {}) 
+        civ.stability = data['stability']
+        civ.population = data['population']
+        civ.territory = data['territory']
+        civ.known_civs = data['known_civs']
+        return civ
+
+"""
+====================== 4. WORLD ======================
+"""
+
+class World:
+    """Main world class that contains all civilizations and manages the simulation"""
+    
+    def __init__(self, seed=None, num_civs=4):
+        self.seed = seed if seed is not None else random.randint(1, 10000)
+        self.rng = random.Random(self.seed)
+        
+        self.year = 0
+        self.civilizations = []
+        self.all_people = {}
+        self.all_factions = {}
+        self.history_archive = HistoryArchive(rng=self.rng)
+        self.legends_mode = LegendsMode(self.history_archive, self, rng=self.rng)
+        
+        civ_names = ["Sylgard", "Quor-Thal", "Arador", "Zanthar"]
+        for name in civ_names[:num_civs]:
+            civ = Civilization(name, self.year, rng=self.rng)
+            self.civilizations.append(civ)
+            
+            self.history_archive.record_event(HistoryEvent(
+                year=self.year, event_type="foundation", civilization=name,
+                details=f"was founded in the early ages",
+                severity="major", rng=self.rng
+            ))
+        
+        self._rebuild_indices()
+        self._initialize_diplomacy()
+    
+    def _rebuild_indices(self):
+        """Rebuild the all_people and all_factions index from civilizations"""
+        self.all_people = {}
+        self.all_factions = {}
+        for civ in self.civilizations:
+            for person in civ.individuals:
+                self.all_people[person.id] = person
+            for faction in civ.factions:
+                self.all_factions[faction.id] = faction
+    
+    def _initialize_diplomacy(self):
+        """Initialize diplomatic relations between civilizations"""
+        for civ in self.civilizations:
+            for other_civ in self.civilizations:
+                if civ.name != other_civ.name:
+                    civ.relations[other_civ.name] = self.rng.randint(-30, 30)
+                    civ.known_civs.append(other_civ.name)
+    
+    def update_year(self):
+        """Update the world for one year"""
+        self.year += 1
+        
+        for civ in self.civilizations:
+            civ.update_year(self)
+        
+        self._rebuild_indices() 
+        
+        if self.year % 10 == 0:
+            self.history_archive.record_event(HistoryEvent(
+                year=self.year, event_type="annual_summary", civilization="World",
+                details=f"Year {self.year} - The world continues to turn...",
+                severity="minor", rng=self.rng
+            ))
+    
+    def get_civ_by_name(self, name):
+        for civ in self.civilizations:
+            if civ.name.lower() == name.lower():
+                return civ
+        return None
+    
+    def get_person_by_id(self, person_id):
+        return self.all_people.get(person_id)
+
+    def get_faction_by_id(self, faction_id): 
+        return self.all_factions.get(faction_id)
+    
+    # --- War & Peace ---
+    
+    def declare_war(self, civ1, civ2, holy=False, declared_by=None):
+        """Handle the declaration of war"""
+        if civ2.name in civ1.active_wars:
+            return 
+            
+        civ1.active_wars[civ2.name] = {"type": "holy" if holy else "territorial"}
+        civ2.active_wars[civ1.name] = {"type": "holy" if holy else "territorial"}
+        
+        civ1.relations[civ2.name] = -100
+        civ2.relations[civ1.name] = -100
+        
+        event_type = "holy_war_declaration" if holy else "war_declaration"
+        details = f"{civ1.name} declared war on {civ2.name}"
+        if holy:
+            details = f"{civ1.name} declared a HOLY WAR on {civ2.name}!"
+            
+        self.history_archive.record_event(HistoryEvent(
+            year=self.year, event_type=event_type, civilization=civ1.name,
+            details=details, person_id=declared_by.id if declared_by else None,
+            other_civ=civ2.name, severity="major", rng=self.rng
+        ))
+
+    def simulate_battle(self, civ1, civ2):
+        """Simulate a single battle between two civs"""
+        
+        mods1 = civ1.military["war_power"] + civ1.war_power_bonus
+        mods2 = civ2.military["war_power"] + civ2.war_power_bonus
+        
+        if civ1.active_wars[civ2.name]["type"] == "holy":
+            mods1 *= 1.2 
+            mods2 *= 1.2
+            
+        civ1_power = civ1.military["army_size"] * civ1.technology["military_tactics"] * (mods1 / 100.0)
+        civ2_power = civ2.military["army_size"] * civ2.technology["military_tactics"] * (mods2 / 100.0)
+        
+        if civ1_power + civ2_power == 0: return 
+        
+        if civ1_power > civ2_power * self.rng.uniform(0.8, 1.2):
+            winner, loser = civ1, civ2
+        else:
+            winner, loser = civ2, civ1
+            
+        gen = next((p for p in winner.individuals if p.profession == "General" and p.alive), None)
+        if gen:
+            gen.add_fame(10, self, f"victory over {loser.name}")
+            details = f"{winner.name}, led by {gen.full_name}, defeated {loser.name} in battle"
+            pid = gen.id
+        else:
+            leader = winner.get_current_leader(self)
+            details = f"{winner.name} defeated {loser.name} in battle"
+            pid = leader.id if leader else None
+            
+        self.history_archive.record_event(HistoryEvent(
+            year=self.year, event_type="battle", civilization=winner.name,
+            details=details, person_id=pid,
+            other_civ=loser.name, severity="major", rng=self.rng
+        ))
+        
+        loser.stability = max(0, loser.stability - 10)
+
+    def make_peace(self, civ1, civ2):
+        """End a war between two civs"""
+        if civ2.name not in civ1.active_wars:
+            return
+            
+        del civ1.active_wars[civ2.name]
+        del civ2.active_wars[civ1.name]
+        
+        civ1.relations[civ2.name] = -10
+        civ2.relations[civ1.name] = -10
+        
+        self.history_archive.record_event(HistoryEvent(
+            year=self.year, event_type="diplomatic_peace", civilization=civ1.name,
+            details=f"A peace treaty was signed between {civ1.name} and {civ2.name}",
+            person_id=civ1.get_current_leader(self).id,
+            other_civ=civ2.name, severity="major", rng=self.rng
+        ))
+
+    # --- Simulation & Save/Load ---
+    
+    def simulate(self, years=100, save_interval=10):
+        """Run the simulation for the specified number of years"""
+        print(f"Starting simulation for {years} years (Seed: {self.seed})...")
+        for year in range(years):
+            self.update_year()
+            if (year + 1) % save_interval == 0:
+                print(f"Year {self.year}: {len(self.civilizations)} civilizations, {len(self.all_people)} living individuals")
+        print(f"Simulation complete! Final year: {self.year}")
+    
+    def to_dict(self):
+        """Convert world state to dictionary for saving"""
+        self._rebuild_indices() 
+        return {
+            'seed': self.seed,
+            'year': self.year,
+            'civilizations': [civ.to_dict() for civ in self.civilizations],
+            'history_archive': self.history_archive.to_dict()
+        }
+    
+    @classmethod
+    def from_dict(cls, data):
+        """Load world state from dictionary"""
+        world = cls(seed=data['seed'], num_civs=0)
+        world.year = data['year']
+        
+        world.civilizations = []
+        world.all_people = {}
+        world.all_factions = {}
+        
+        world.civilizations = [Civilization.from_dict(civ_data, world, rng=world.rng) 
+                              for civ_data in data['civilizations']]
+        
+        world.history_archive = HistoryArchive.from_dict(data['history_archive'], rng=world.rng)
+        world.legends_mode = LegendsMode(world.history_archive, world, rng=world.rng)
+        
+        return world
+
+    # --- UI Display Functions ---
+    
+    def display_world_status(self):
+        """Print the main status screen"""
+        print("\n" + "=" * 60)
+        print(f"WORLD STATUS - Year {self.year} (Seed: {self.seed})")
+        print("=" * 60)
+        
+        total_pop = sum(c.population for c in self.civilizations)
+        print(f"Total Population: {total_pop}")
+        
+        for civ in self.civilizations:
+            civ.display_status(self)
+
+    def display_recent_events(self, years=1):
+        """Show major events from the last X years"""
+        print("\n" + "-" * 40)
+        print(f"Notable Events (Year {self.year})")
+        print("-" * 40)
+        
+        events = self.history_archive.get_recent_events(years_back=years, current_year=self.year)
+        # Filter out minor events
+        major_events = [e for e in events if e.severity in ["major", "catastrophic"]]
+        
+        if not major_events:
+            print("A quiet year...")
+        else:
+            for event in major_events:
+                print(f"- {event}")
+
+    def display_faction_summary(self, civ_name=None):
+        """Show faction details for one or all civs"""
+        print("\n" + "=" * 40)
+        print("FACTION SUMMARY")
+        print("=" * 40)
+        
+        civs_to_show = self.civilizations
+        if civ_name:
+            civ = self.get_civ_by_name(civ_name)
+            if civ: civs_to_show = [civ]
+            else: print(f"Civilization '{civ_name}' not found."); return
+
+        for civ in civs_to_show:
+            print(f"\n--- {civ.name} ---")
+            for faction in civ.factions:
+                print(f"  - The {faction.name} (Ideology: {faction.ideology})")
+                print(f"    Influence: {int(faction.influence)}")
+                leader = faction.get_leader(self)
+                if leader:
+                    print(f"    Leader: {leader.full_name}")
+                if faction.agenda:
+                    print(f"    Agenda: {faction.agenda[0]['type'].replace('_', ' ')}")
+
+    def display_individuals_summary(self, civ_name=None):
+        """Show notable individuals for one or all civs"""
+        print("\n" + "=" * 40)
+        print("NOTABLE INDIVIDUALS")
+        print("=" * 40)
+
+        civs_to_show = self.civilizations
+        if civ_name:
+            civ = self.get_civ_by_name(civ_name)
+            if civ: civs_to_show = [civ]
+            else: print(f"Civilization '{civ_name}' not found."); return
+        
+        for civ in civs_to_show:
+            print(f"\n--- {civ.name} ---")
+            leader = civ.get_current_leader(self)
+            if leader:
+                title = "Ruler"
+                if civ.regent and civ.regent['regent_id'] == leader.id:
+                    title = "Regent"
+                print(f"RULER: {leader.full_name} ({title}) (Age: {leader.age}, Fame: {int(leader.fame)})")
+            
+            heroes = [p for p in civ.individuals if p.is_hero and p.alive]
+            if heroes:
+                print("\n  Heroes:")
+                for h in heroes:
+                    print(f"    - {h.full_name} ({h.profession}), Fame: {int(h.fame)}")
+            
+            print("\n  Other Nobles:")
+            nobles = [p for p in civ.individuals if p.dynasty and p.profession != "Ruler" and p.alive and not p.is_hero]
+            nobles.sort(key=lambda x: x.fame, reverse=True)
+            if not nobles:
+                print("    - None")
+            for p in nobles[:5]: # Show top 5
+                print(f"    - {p.full_name} ({p.profession}), Fame: {int(p.fame)}")
+
+
+"""
+====================== 5. MAIN SIMULATION (INTERACTIVE) ======================
+"""
+
+def save_world(world, filename="world_save.json"):
+    """Saves the entire world state to a JSON file"""
+    try:
+        with open(filename, 'w') as f:
+            json.dump(world.to_dict(), f, indent=2)
+        print(f"\n✅ World saved successfully to {filename}")
+    except Exception as e:
+        print(f"\n❌ Error saving world: {e}")
+        import traceback
+        traceback.print_exc()
+
+def load_world(filename="world_save.json"):
+    """Loads the entire world state from a JSON file"""
+    try:
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        world = World.from_dict(data)
+        print(f"\n✅ World loaded successfully from {filename}")
+        print(f"Current Year: {world.year}")
+        return world
+    except FileNotFoundError:
+        print(f"\n❌ Save file '{filename}' not found.")
+        return None
+    except Exception as e:
+        print(f"\n❌ Error loading world: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def main():
+    """Main interactive loop"""
+    print("="*80)
+    print("      FANTASY ENGINE - PRE-ALPHA 11: FULL")
+    print("="*80)
+    
+    world = None
+    
+    while not world:
+        print("\n[1] Start a new world")
+        print("[2] Load a saved world")
+        print("[q] Quit")
+        choice = input("Choose an option: ").strip().lower()
+
+        if choice == '1':
+            seed_input = input("Enter a seed number (or leave blank for random): ").strip()
+            seed = int(seed_input) if seed_input.isdigit() else None
+            
+            print(f"\nGenerating new world... (Seed: {seed or 'Random'})")
+            world = World(seed=seed, num_civs=4)
+            world.display_world_status()
+
+        elif choice == '2':
+            filename = input("Enter save file name (default 'world_save.json'): ").strip() or "world_save.json"
+            world = load_world(filename)
+            if world:
+                world.display_world_status()
+
+        elif choice == 'q':
+            print("Goodbye!")
+            return
+        else:
+            print("Invalid choice. Please try again.")
+    
+    # --- Main Game Loop ---
+    try:
+        while True:
+            print("\n" + "="*80)
+            cmd = input("Press Enter to advance 1 year, or type command:\n"
+                        "[s] Save  |  [l] Load  |  [q] Quit\n"
+                        "[v] Legends  |  [i] Individuals  |  [f] Factions\n"
+                        "Command: ").strip().lower()
+
+            if cmd == 'q':
+                print("Quitting simulation.")
+                break
+            
+            elif cmd == 's':
+                filename = input("Enter save file name (default 'world_save.json'): ").strip() or "world_save.json"
+                save_world(world, filename)
+            
+            elif cmd == 'l':
+                filename = input("Enter save file name to load (default 'world_save.json'): ").strip() or "world_save.json"
+                loaded_world = load_world(filename)
+                if loaded_world:
+                    world = loaded_world
+                world.display_world_status()
+
+            elif cmd == 'v':
+                print("\n--- LEGENDS MODE ---")
+                print("[1] World Chronicle (last 50 years)")
+                print("[2] Civilization Biography")
+                print("[3] Person Biography")
+                view_choice = input("Choose view: ").strip()
+                
+                if view_choice == '1':
+                    print(world.legends_mode.generate_world_chronicle(max(0, world.year - 50), world.year))
+                elif view_choice == '2':
+                    civ_name = input("Enter Civilization name: ").strip().capitalize()
+                    if world.get_civ_by_name(civ_name):
+                        print(world.legends_mode.generate_civilization_biography(civ_name, world.year))
+                    else:
+                        print(f"Civilization '{civ_name}' not found.")
+                elif view_choice == '3':
+                    person_name = input("Enter Person's first name: ").strip().capitalize()
+                    # Find any person whose first name matches
+                    person = next((p for p in world.all_people.values() if p.name == person_name), None)
+                    if person:
+                        print(world.legends_mode.generate_person_biography(person.id))
+                    else:
+                        print(f"Person '{person_name}' not found.")
+                else:
+                    print("Invalid choice.")
+            
+            elif cmd == 'i':
+                civ_name = input("Enter Civilization name (or blank for all): ").strip().capitalize()
+                world.display_individuals_summary(civ_name if civ_name else None)
+
+            elif cmd == 'f':
+                civ_name = input("Enter Civilization name (or blank for all): ").strip().capitalize()
+                world.display_faction_summary(civ_name if civ_name else None)
+
+            elif cmd == '':
+                # --- Advance One Year ---
+                print(f"\n--- Simulating Year {world.year + 1} ---")
+                world.update_year()
+                world.display_world_status()
+                world.display_recent_events(years=1)
+            
+            else:
+                print(f"Unknown command: '{cmd}'")
+
+    except KeyboardInterrupt:
+        print("\nSimulation ended by user.")
+    except EOFError:
+        print("\nInput ended. Simulation stopped.")
+    except Exception as e:
+        print(f"\n--- A CRITICAL ERROR OCCURRED ---")
+        import traceback
+        traceback.print_exc()
+        print("Attempting to save world to 'crash_save.json'...")
+        if world:
+            save_world(world, "crash_save.json")
+        print("Exiting.")
+
+
+if __name__ == "__main__":
+    main()
