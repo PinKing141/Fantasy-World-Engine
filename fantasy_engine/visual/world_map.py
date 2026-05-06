@@ -51,7 +51,8 @@ class MapTerrainCellView:
     height: float
     terrain_kind: str
     surface_value: float
-    fertility_value: float
+    height_value: float
+    moisture_value: float
     relief_value: float
 
 
@@ -273,11 +274,14 @@ def _build_terrain_surface(
                 influence_radii,
                 surface_seed,
             )
+            height_value = _height_value(center_x, center_y, surface_seed)
+            moisture_value = _moisture_value(center_x, center_y, surface_seed)
+            relief_value = _relief_value(center_x, center_y, surface_seed)
             terrain_kind = _terrain_kind(
-                center_x,
-                center_y,
                 land_strength,
-                surface_seed,
+                height_value,
+                moisture_value,
+                relief_value,
             )
             cell = MapTerrainCellView(
                 x=round(center_x, 4),
@@ -286,8 +290,9 @@ def _build_terrain_surface(
                 height=round(cell_height, 4),
                 terrain_kind=terrain_kind,
                 surface_value=round(land_strength, 4),
-                fertility_value=round(_fertility_value(center_x, center_y, surface_seed), 4),
-                relief_value=round(_relief_value(center_x, center_y, surface_seed), 4),
+                height_value=round(height_value, 4),
+                moisture_value=round(moisture_value, 4),
+                relief_value=round(relief_value, 4),
             )
             row_cells.append(cell)
             terrain_cells.append(cell)
@@ -362,24 +367,42 @@ def _land_strength(
     return influence_total + macro_noise * 0.34 + coast_noise * 0.22 + (0.05 if inside_any_territory else -0.2)
 
 
-def _terrain_kind(center_x: float, center_y: float, land_strength: float, surface_seed: int) -> str:
+def _terrain_kind(land_strength: float, height_value: float, moisture_value: float, relief_value: float) -> str:
     if land_strength < _DEEP_WATER_THRESHOLD:
         return "deep_water"
     if land_strength < _LAND_THRESHOLD:
         return "shallow_water"
 
-    relief_noise = _relief_value(center_x, center_y, surface_seed)
-    fertility_noise = _fertility_value(center_x, center_y, surface_seed)
-
-    if relief_noise > 0.6:
+    if relief_value > 0.66 or height_value > 0.62:
         return "mountain"
-    if relief_noise > 0.4:
+    if relief_value > 0.46 or height_value > 0.4:
         return "highland"
-    if relief_noise > 0.2:
+    if relief_value > 0.24:
         return "hill"
-    if fertility_noise > 0.08:
+    if moisture_value > 0.08:
         return "fertile_land"
     return "poor_land"
+
+
+def _height_value(center_x: float, center_y: float, surface_seed: int) -> float:
+    broad_ridge = snoise2(
+        (center_x + surface_seed * 0.0021) / 4.6,
+        (center_y - surface_seed * 0.0016) / 3.9,
+        octaves=2,
+        persistence=0.55,
+        lacunarity=2.0,
+        base=surface_seed + 211,
+    )
+    ridge_strength = 1.0 - abs(broad_ridge)
+    continental_shape = snoise2(
+        (center_x - surface_seed * 0.0013) / 6.2,
+        (center_y + surface_seed * 0.0018) / 6.2,
+        octaves=2,
+        persistence=0.5,
+        lacunarity=2.0,
+        base=surface_seed + 257,
+    )
+    return ridge_strength * 0.62 + continental_shape * 0.38
 
 
 def _relief_value(center_x: float, center_y: float, surface_seed: int) -> float:
@@ -393,7 +416,7 @@ def _relief_value(center_x: float, center_y: float, surface_seed: int) -> float:
     )
 
 
-def _fertility_value(center_x: float, center_y: float, surface_seed: int) -> float:
+def _moisture_value(center_x: float, center_y: float, surface_seed: int) -> float:
     return snoise2(
         (center_x - surface_seed * 0.0013) / 2.6,
         (center_y + surface_seed * 0.0017) / 2.6,
@@ -496,13 +519,15 @@ def _render_terrain_surface(axes, map_view: WorldMapView) -> None:
 
     surface = np.zeros((len(y_values), len(x_values)))
     relief = np.zeros_like(surface)
-    fertility = np.zeros_like(surface)
+    moisture = np.zeros_like(surface)
+    height = np.zeros_like(surface)
     for cell in map_view.terrain_cells:
         row = y_index[cell.y]
         column = x_index[cell.x]
         surface[row, column] = cell.surface_value
         relief[row, column] = cell.relief_value
-        fertility[row, column] = cell.fertility_value
+        moisture[row, column] = cell.moisture_value
+        height[row, column] = cell.height_value
 
     x_grid, y_grid = np.meshgrid(x_values, y_values)
     land_mask = surface >= _LAND_THRESHOLD
@@ -517,7 +542,7 @@ def _render_terrain_surface(axes, map_view: WorldMapView) -> None:
         zorder=-4,
     )
 
-    fertile_overlay = np.ma.masked_where(~land_mask | (fertility < 0.08), fertility)
+    fertile_overlay = np.ma.masked_where(~land_mask | (moisture < 0.08), moisture)
     if fertile_overlay.count() > 0:
         axes.contourf(
             x_grid,
@@ -530,7 +555,7 @@ def _render_terrain_surface(axes, map_view: WorldMapView) -> None:
             zorder=-3,
         )
 
-    hill_overlay = np.ma.masked_where(~land_mask | (relief < 0.2), relief)
+    hill_overlay = np.ma.masked_where(~land_mask | ((relief < 0.2) & (height < 0.3)), np.maximum(relief, height))
     if hill_overlay.count() > 0:
         axes.contourf(
             x_grid,

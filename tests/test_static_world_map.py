@@ -34,6 +34,9 @@ class StaticWorldMapTests(unittest.TestCase):
         self.assertTrue(any(cell.terrain_kind == "fertile_land" for cell in left_view.terrain_cells))
         self.assertTrue(any(cell.terrain_kind == "hill" for cell in left_view.terrain_cells))
         self.assertTrue(any(cell.terrain_kind in {"highland", "mountain"} for cell in left_view.terrain_cells))
+        self.assertTrue(any(cell.moisture_value > 0.15 for cell in left_view.terrain_cells))
+        self.assertTrue(any(cell.moisture_value < -0.15 for cell in left_view.terrain_cells))
+        self.assertTrue(any(cell.height_value > 0.45 for cell in left_view.terrain_cells))
         self.assertTrue(left_view.coastline_segments)
         self.assertTrue(all(len(route.path_points) >= 3 for route in left_view.routes))
 
