@@ -130,6 +130,20 @@ class HistoryArchive:
                     return
             return
 
+        if event.event_type == "schism_pressure":
+            for predecessor_type in ("court_hoarding", "unrest", "food_shortage"):
+                predecessors = self.get_recent_events(
+                    event.civilization,
+                    predecessor_type,
+                    years_back=2,
+                    current_year=event.year,
+                )
+                if predecessors:
+                    event.caused_by = predecessors[-1].event_id
+                    self._cause_effect.append((event.caused_by, event.event_id))
+                    return
+            return
+
         if event.event_type == "foreign_backing":
             pressures = self.get_recent_events(event.civilization, "faction_pressure", years_back=1, current_year=event.year)
             if pressures:

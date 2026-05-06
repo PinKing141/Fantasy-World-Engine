@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fantasy_engine.app.protocols import SocietyWorld
+from fantasy_engine.characters.person import clamp
 from fantasy_engine.core.engine import Phase, TickContext
 from fantasy_engine.core.events import HistoryEvent
 
@@ -155,7 +156,14 @@ class SocietySystem:
             )
         )
 
-        self._apply_shortage_branch(world, civilization, context, shortage_ratio, shortage_event)
+        branch_event = self._apply_shortage_branch(world, civilization, context, shortage_ratio, shortage_event)
+        self._apply_faith_pressure(
+            world,
+            civilization,
+            context,
+            shortage_ratio=shortage_ratio,
+            trigger_event=branch_event or shortage_event,
+        )
 
         if civilization.unrest >= 35.0:
             world.history.record_event(
@@ -205,9 +213,9 @@ class SocietySystem:
         context: TickContext,
         shortage_ratio: float,
         shortage_event: HistoryEvent,
-    ) -> None:
+    ) -> HistoryEvent | None:
         if shortage_ratio < 0.18 or civilization.shortage_response_cooldown > 0:
-            return
+            return None
 
         contested_routes = 0
         severed_routes = 0
@@ -232,14 +240,14 @@ class SocietySystem:
         }
         branch_name, branch_score = max(branch_scores.items(), key=lambda item: item[1])
         if branch_score <= 0.0:
-            return
+            return None
 
         civilization.shortage_response_cooldown = 2
         if branch_name == "trade_chokepoint":
             civilization.unrest = min(100.0, civilization.unrest + 5.0)
             civilization.stability = max(0.0, civilization.stability - 2.5)
             civilization.unmet_food_pressure += 5.0
-            world.history.record_event(
+            return world.history.record_event(
                 HistoryEvent(
                     year=context.year,
                     season=context.season,
@@ -259,14 +267,13 @@ class SocietySystem:
                     },
                 )
             )
-            return
 
         if branch_name == "military_rationing":
             civilization.war_exhaustion += 7.0
             civilization.stability = max(0.0, civilization.stability - 3.0)
             civilization.court.general.fatigue = min(100.0, civilization.court.general.fatigue + 3.0)
             civilization.court.general.grievance = min(100.0, civilization.court.general.grievance + 5.0)
-            world.history.record_event(
+            return world.history.record_event(
                 HistoryEvent(
                     year=context.year,
                     season=context.season,
@@ -284,12 +291,11 @@ class SocietySystem:
                     },
                 )
             )
-            return
 
         civilization.legitimacy = max(0.0, civilization.legitimacy - 6.5)
         civilization.unrest = min(100.0, civilization.unrest + 4.5)
         civilization.ruler.grievance = min(100.0, civilization.ruler.grievance + 4.0)
-        world.history.record_event(
+        return world.history.record_event(
             HistoryEvent(
                 year=context.year,
                 season=context.season,
@@ -304,6 +310,55 @@ class SocietySystem:
                     "legitimacy": round(civilization.legitimacy, 1),
                     "ruler": civilization.ruler.name,
                     "ruler_id": civilization.ruler.agent_id,
+                },
+            )
+        )
+
+    def _apply_faith_pressure(
+        self,
+        world: SocietyWorld,
+        civilization: "Civilization",
+        context: TickContext,
+        *,
+        shortage_ratio: float,
+        trigger_event: HistoryEvent,
+    ) -> None:
+        legitimacy_strain = max(0.0, 52.0 - civilization.legitimacy)
+        alignment_gap = civilization.faith_alignment_gap()
+        crisis_pressure = shortage_ratio * 20.0 + legitimacy_strain * 0.35 + max(0.0, civilization.unrest - 20.0) * 0.18
+        gain = max(0.0, crisis_pressure + alignment_gap * 18.0 - civilization.stability * 0.08)
+        if gain <= 0.0:
+            return
+
+        civilization.schism_pressure = clamp(civilization.schism_pressure + gain, 0.0, 100.0)
+        if civilization.schism_pressure < 14.0:
+            return
+
+        details = (
+            f"Shortage and shaken legitimacy drove open dispute around {civilization.name}'s {civilization.faith_id} faith and rites. "
+            f"Schism pressure rose to {civilization.schism_pressure:.1f}."
+        )
+        if alignment_gap >= 0.25:
+            details = (
+                f"Shortage and shaken legitimacy drove open dispute around {civilization.name}'s {civilization.faith_id} faith and rites. "
+                f"{civilization.ruler.name}'s {civilization.ruler.faith_id} court stood visibly apart from the realm's public worship, "
+                f"and schism pressure rose to {civilization.schism_pressure:.1f}."
+            )
+
+        world.history.record_event(
+            HistoryEvent(
+                year=context.year,
+                season=context.season,
+                event_type="schism_pressure",
+                civilization=civilization.name,
+                details=details,
+                severity="major" if civilization.schism_pressure >= 28.0 else "normal",
+                caused_by=trigger_event.event_id,
+                data={
+                    "faith": civilization.faith_id,
+                    "ruler_faith": civilization.ruler.faith_id,
+                    "alignment_gap": round(alignment_gap, 2),
+                    "schism_pressure": round(civilization.schism_pressure, 1),
                 },
             )
         )
@@ -323,6 +378,7 @@ class SocietySystem:
         civilization.stability = min(100.0, civilization.stability + (1.8 if full else 1.0) * (1.0 + recovery_strength * 0.35))
         civilization.legitimacy = min(100.0, civilization.legitimacy + (1.2 if full else 0.7) * (1.0 + recovery_strength * 0.30))
         civilization.unrest = max(0.0, civilization.unrest - (5.5 if full else 2.5) * (1.0 + recovery_strength * 0.25))
+        civilization.schism_pressure = max(0.0, civilization.schism_pressure - (4.5 if full else 2.0) * (1.0 + recovery_strength * 0.20))
         if civilization.recovery_window > 0:
             civilization.unrest = max(0.0, civilization.unrest - 1.5)
 

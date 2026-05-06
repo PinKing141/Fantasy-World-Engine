@@ -293,6 +293,8 @@ Deliverables:
 
 ## Phase 7: Faith Formation And Schism Pressure
 
+Status: Complete
+
 Scope:
 
 - `fantasy_engine/systems/civilization.py`
@@ -321,18 +323,179 @@ Deliverables:
 - legitimacy and social pressure hooks for belief instability
 - focused schism-pressure regressions
 
+## Phase 8: Court Bonds, Bereavement, And Personal Consequence
+
+Status: Complete
+
+Scope:
+
+- `fantasy_engine/characters/person.py`
+- `fantasy_engine/systems/characters.py`
+- `fantasy_engine/core/events.py` if needed for relationship-linked event chaining
+- `fantasy_engine/world/world.py` only if biography or snapshot visibility needs a minimal extension
+- focused tests only
+
+Success criteria:
+
+- at least one explicit personal bond or kinship signal exists beyond raw dynasty label
+- a court death or defection can create a traceable bereavement or loyalty shock in related agents
+- at least one regression proves the same present-day court behaves differently because one branch experienced personal loss
+- the resulting chain remains legible through existing event history and legends without a prose rewrite
+
+Do not touch:
+
+- hero units
+- profession systems
+- broad household or population-family simulation
+- romance or marriage simulation
+- holy war expansion
+- broad legends rewrite
+- broad diplomacy retuning unless a focused regression requires one narrow hook
+
+Deliverables:
+
+- minimal court-bond state
+- bereavement or loyalty-shock consequences tied to court death or defection
+- focused personal-consequence regressions
+
+## Phase 9: Kin Fallout And Defection Consequence
+
+Status: Complete
+
+Scope:
+
+- `fantasy_engine/characters/person.py`
+- `fantasy_engine/systems/civilization.py` if needed for kinship refresh only
+- `fantasy_engine/systems/characters.py`
+- `fantasy_engine/core/events.py` if needed for kinship-linked event chaining
+- focused tests only
+
+Success criteria:
+
+- court members can recognize at least one broader kin signal beyond direct parent-child or explicit bond pairs
+- a defection can create a traceable personal-loss or estrangement consequence in related court members
+- at least one regression proves the same present-day court can react differently because kin fallout from defection is present
+- the chain remains visible through the existing event history and legends stack without a broad narrative rewrite
+
+Do not touch:
+
+- marriage systems
+- household simulation
+- hero units
+- profession systems
+- holy war expansion
+- broad UI work beyond minimal visibility required by the tests
+
+Deliverables:
+
+- minimal broader kin-network state or inference
+- defection-linked estrangement or kin-loss consequences
+- focused kin-fallout regressions
+
+## Phase 10: Marriage And Household Formation
+
+Status: Complete
+
+Scope:
+
+- `fantasy_engine/characters/person.py`
+- `fantasy_engine/systems/civilization.py`
+- `fantasy_engine/systems/characters.py`
+- `fantasy_engine/world/world.py` if needed for minimal snapshot visibility
+- focused tests only
+
+Success criteria:
+
+- the active engine can form explicit marriages or household ties in the ruling and court layer
+- heirs and replacements can emerge from household context instead of only generic lineage fallback
+- at least one regression proves household state can change succession or court continuity outcomes
+
+Do not touch:
+
+- hero units
+- profession systems
+- holy war expansion
+- broad population-scale family simulation
+
+Deliverables:
+
+- minimal marriage or household state
+- household-aware continuity rules
+- focused household regressions
+
+## Phase 11: Professions And Hero Emergence
+
+Status: Complete
+
+Scope:
+
+- `fantasy_engine/characters/person.py`
+- `fantasy_engine/systems/characters.py`
+- `fantasy_engine/systems/civilization.py` if needed for appointment surfaces
+- `fantasy_engine/world/world.py` if needed for minimal visibility
+- focused tests only
+
+Success criteria:
+
+- notable agents can hold explicit professions or callings beyond court title alone
+- at least one hero-like figure can emerge from pressure, achievement, or survival rather than being pre-scripted
+- at least one regression proves professions or hero status change later decisions or remembered history
+
+Do not touch:
+
+- holy war expansion except for data plumbing required later
+- broad combat rewrite
+- broad UI overhaul
+
+Deliverables:
+
+- minimal profession state
+- minimal hero-emergence path
+- focused profession and hero regressions
+
+## Phase 12: Holy War And Confessional Conflict
+
+Status: Complete
+
+Scope:
+
+- `fantasy_engine/systems/diplomacy.py`
+- `fantasy_engine/systems/military.py`
+- `fantasy_engine/systems/characters.py` if needed for ruler or hero influence
+- `fantasy_engine/core/events.py`
+- event types and focused tests
+
+Success criteria:
+
+- faith conflict can explicitly contribute to war selection or escalation instead of remaining domestic-only pressure
+- at least one regression proves faith-aligned or faith-opposed actors can choose differently because of confessional stakes
+- holy war remains grounded in the existing deterministic diplomacy and war layers rather than becoming a separate ad hoc minigame
+
+Do not touch:
+
+- broad religion rewrite
+- broad military overhaul beyond the smallest confessional-war slice
+- unrelated household tuning
+
+Deliverables:
+
+- confessional war pressure hooks
+- explicit faith-war event chain
+- focused holy-war regressions
+
 ## Current Immediate Task Order
 
-Next approved phase: Phase 7 - Faith Formation And Schism Pressure
+Phase 12 is complete.
+
+No next phase is approved yet.
 
 Follow these next, in order:
 
-1. Add one focused regression proving a concrete pressure path can push an otherwise stable civilization into faith instability or schism pressure.
-2. Add the smallest explicit faith state to the modular civilization layer without importing a full religion subsystem.
-3. Connect that faith state to legitimacy, ruler or court alignment, and social pressure so belief fracture can become a visible causal factor.
-4. Stop and report before widening into holy wars, hero units, or broad narrative rewrite.
+1. Define a fresh post-Phase-12 roadmap target before making further source changes.
+2. Preserve the active kin, household, hero, profession, and holy-war slices as the current stopping point.
+3. Do not widen into unrelated world systems until the next phase is explicitly approved.
 
-These tasks matter because the roadmap already promises faith and schism as part of meaningful history. The next gap is making belief a live source of pressure instead of leaving dynasties and crises to operate without a religious layer.
+These tasks matter because the roadmap now includes the approved personal, household, hero, profession, and confessional-war slices. The next gap is choosing a fresh target instead of widening the engine without a new phase boundary.
 
 ## Stop Conditions
 

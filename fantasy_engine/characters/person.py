@@ -21,7 +21,9 @@ class Agent:
     home_civilization: str
     gender: str
     culture_id: str
+    faith_id: str
     role: str
+    profession: str
     age: int
     health: float
     competence: float
@@ -35,8 +37,15 @@ class Agent:
     fatigue: float = 0.0
     alive: bool = True
     parent_ids: tuple[str, ...] = ()
+    bond_ids: tuple[str, ...] = ()
+    spouse_id: str | None = None
+    household_id: str | None = None
     grudges: dict[str, float] = field(default_factory=dict)
     needs: AgentNeeds = field(default_factory=AgentNeeds)
+    bereavement_load: float = 0.0
+    estrangement_load: float = 0.0
+    heroic_reputation: float = 0.0
+    heroic_title: str | None = None
 
     @classmethod
     def create(
@@ -46,10 +55,12 @@ class Agent:
         role: str,
         *,
         culture_id: str = "frontier",
+        faith_id: str | None = None,
         parent: "Agent" | None = None,
         co_parent: "Agent" | None = None,
         parent_name: str | None = None,
         dynasty_name: str | None = None,
+        bond_ids: tuple[str, ...] = (),
     ) -> "Agent":
         gender = "male" if rng.random() < 0.55 else "female"
         parent_given_name = parent.given_name if parent is not None else (parent_name.split()[0] if parent_name else None)
@@ -93,7 +104,9 @@ class Agent:
             home_civilization=civilization_name,
             gender=generated_name.gender,
             culture_id=generated_name.culture_id,
+            faith_id=faith_id or generated_name.culture_id,
             role=role,
+            profession=cls.default_profession(role),
             age=age,
             health=clamp(health),
             competence=clamp(competence),
@@ -107,6 +120,11 @@ class Agent:
                 ancestor.agent_id
                 for ancestor in (parent, co_parent)
                 if ancestor is not None
+            ),
+            bond_ids=tuple(
+                dict.fromkeys(
+                    (*bond_ids, *(ancestor.agent_id for ancestor in (parent, co_parent) if ancestor is not None))
+                )
             ),
         )
 
@@ -124,6 +142,7 @@ class Agent:
 
     def retitle(self, role: str) -> None:
         self.role = role
+        self.profession = self.default_profession(role)
         if role == "Ruler":
             self.authority = clamp(self.authority + 10.0)
             self.loyalty = clamp(self.loyalty + 6.0)
@@ -133,3 +152,49 @@ class Agent:
 
     def grudge_toward(self, target: str) -> float:
         return self.grudges.get(target, 0.0)
+
+    def add_bond(self, agent_id: str) -> None:
+        if agent_id == self.agent_id or agent_id in self.bond_ids:
+            return
+        self.bond_ids = (*self.bond_ids, agent_id)
+
+    def is_bonded_to(self, agent_id: str) -> bool:
+        return agent_id in self.parent_ids or agent_id in self.bond_ids
+
+    def bond_label(self, agent_id: str) -> str:
+        if agent_id in self.parent_ids:
+            return "parent"
+        if agent_id in self.bond_ids:
+            return "court bond"
+        return "relation"
+
+    def relationship_to(self, other: "Agent") -> str | None:
+        if other.agent_id in self.parent_ids:
+            return "parent"
+        if self.agent_id in other.parent_ids:
+            return "child"
+        if self.parent_ids and other.parent_ids and set(self.parent_ids).intersection(other.parent_ids):
+            return "sibling"
+        if other.agent_id in self.bond_ids:
+            return "court bond"
+        return None
+
+    def marry(self, other: "Agent", household_id: str) -> None:
+        self.spouse_id = other.agent_id
+        self.household_id = household_id
+        other.spouse_id = self.agent_id
+        other.household_id = household_id
+
+    @staticmethod
+    def default_profession(role: str) -> str:
+        return {
+            "Ruler": "statesman",
+            "Consort": "household patron",
+            "Heir": "court ward",
+            "General": "commander",
+            "Diplomat": "envoy",
+            "Steward": "administrator",
+            "Commoner Tribune": "tribune",
+            "Noble Speaker": "courtier",
+            "Military Leader": "commander",
+        }.get(role, "courtier")

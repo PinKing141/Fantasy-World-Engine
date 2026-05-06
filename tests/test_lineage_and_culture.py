@@ -28,7 +28,7 @@ class LineageAndCultureRegressionTests(unittest.TestCase):
         self.assertEqual(civilization.ruler.agent_id, previous_heir.agent_id)
         self.assertEqual(civilization.ruler.dynasty_name, previous_heir.dynasty_name)
         self.assertEqual(civilization.court.heir.dynasty_name, previous_heir.dynasty_name)
-        self.assertEqual(civilization.court.heir.parent_ids, (previous_heir.agent_id,))
+        self.assertIn(previous_heir.agent_id, civilization.court.heir.parent_ids)
         self.assertTrue(any(event.event_type == "succession" for event in world.history.events))
 
     def test_migration_creates_one_drifted_descendant_culture(self) -> None:

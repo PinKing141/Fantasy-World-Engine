@@ -579,8 +579,8 @@ class StepResultAndControllerTests(unittest.TestCase):
         self.assertIn("Pop", rendered)
         self.assertIn("Events", rendered)
         self.assertIn("[s] step  [e] skip major  [q] quit", rendered)
-        self.assertNotIn("Court", rendered)
-        self.assertNotIn("Factions", rendered)
+        self.assertFalse(any(line.strip(" │─╭╮╰╯") == "Court" for line in rendered_lines))
+        self.assertFalse(any(line.strip(" │─╭╮╰╯") == "Factions" for line in rendered_lines))
         self.assertNotIn("Culture    ", rendered)
         self.assertNotIn("Dynasty    ", rendered)
 

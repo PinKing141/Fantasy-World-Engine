@@ -74,7 +74,8 @@ class World:
                     civilization=civilization.name,
                     details=(
                         f"{civilization.name} took root in {civilization.region.name} under {civilization.ruler.name}, building its fortunes around "
-                        f"{civilization.region.terrain.name.lower()} ground, fertility {civilization.region.fertility:.2f}, and route cost {civilization.route_cost:.2f}."
+                        f"{civilization.region.terrain.name.lower()} ground, the {civilization.faith_id} faith, fertility {civilization.region.fertility:.2f}, "
+                        f"and route cost {civilization.route_cost:.2f}."
                     ),
                     severity="major",
                 )
@@ -418,7 +419,7 @@ class World:
         if not agent_id or agent_id == "unknown":
             return "unknown"
 
-        active_agents = [*civilization.court_members(), *(faction.leader for faction in civilization.factions)]
+        active_agents = [*civilization.court_members(), civilization.court.consort, *(faction.leader for faction in civilization.factions)]
         for agent in active_agents:
             if agent.agent_id == agent_id:
                 return agent.name
@@ -718,7 +719,7 @@ class World:
 
     def _find_agent_anywhere(self, agent_id: str):
         for civilization in self.civilizations:
-            for agent in [*civilization.court_members(), *(faction.leader for faction in civilization.factions)]:
+            for agent in [*civilization.court_members(), civilization.court.consort, *(faction.leader for faction in civilization.factions)]:
                 if agent.agent_id == agent_id:
                     return agent, civilization
         return None, None

@@ -10,6 +10,12 @@ This file summarizes the major work completed so far on the current modular Fant
 - Phase 4 is complete: domestic faction crises can now seek explicit foreign backing, escalate into external war against meddling powers, and receive direct coup assistance from that same foreign channel.
 - Phase 5 is complete: the active modular engine now includes a chain-reading legends layer that follows stored cause/effect links and exposes recent legend summaries at run end without reviving the legacy legends path.
 - Phase 6 is complete: explicit region and route terrain profiles now shape harvest potential, economic travel cost, and campaign efficiency, with focused regressions proving terrain changes concrete outcomes.
+- Phase 7 is complete: civilizations and court members now hold explicit faith identity, shortage-era legitimacy crises can raise schism pressure through traceable events, and court-faith misalignment can make the same crisis land differently.
+- Phase 8 is complete: court members now carry explicit personal bonds, ruler death can create traceable bereavement pressure in bonded heirs, and otherwise equivalent successor courts can diverge because one branch is still carrying personal loss.
+- Phase 9 is complete: court members can now infer sibling-like kin ties from shared lineage, defections can create traceable estrangement consequences, and otherwise equivalent courts can diverge because one branch still carries kin fallout.
+- Phase 10 is complete: ruling households now form explicit consort marriage state, heirs can emerge from two-parent household context, and succession can regenerate the ruling household instead of relying on a one-parent lineage fallback alone.
+- Phase 11 is complete: agents now hold explicit profession state, victorious generals can rise into named heroic figures, and heroic reputation can change later campaign power.
+- Phase 12 is complete: faith conflict can now bias war-target choice and major faith-opposed wars can emit explicit holy-war events instead of remaining only domestic schism pressure.
 
 ## Active Runtime Surface
 
@@ -53,6 +59,8 @@ This file summarizes the major work completed so far on the current modular Fant
 - Replaced generic force projection with supply-, arms-, and command-based military power.
 - Added succession support through heir promotion.
 - Added court replacement rules for dead or replaced office holders.
+- Added explicit civilization-level faith identity, faith-origin tracking, and schism-pressure state.
+- Added court-level faith alignment handling so new heirs and replacements preserve the active ruling faith unless the simulation diverges.
 - Added coup handling and faction pressure in `fantasy_engine/systems/factions.py`.
 - Fixed coup behavior so promoted faction leaders are replaced rather than causing self-coup loops.
 - Added a first foreign-backing path so high-pressure factions can open covert contact with hostile neighboring powers instead of remaining purely internal.
@@ -62,6 +70,7 @@ This file summarizes the major work completed so far on the current modular Fant
 
 - Added harvest, milling, spoilage, court provisioning, and military provisioning in `fantasy_engine/systems/economy.py`.
 - Added shortage, famine, recovery, relief spending, unrest, and population change in `fantasy_engine/systems/society.py`.
+- Added schism-pressure escalation in `fantasy_engine/systems/society.py` so shortage and legitimacy crises can become explicit faith-instability events instead of remaining flavor.
 - Added diplomacy and crisis externalization in `fantasy_engine/systems/diplomacy.py`.
 - Added explicit route-based shipment delivery in `fantasy_engine/systems/trade.py`.
 - Added campaign and logistics-driven warfare in `fantasy_engine/systems/military.py`.
@@ -95,7 +104,7 @@ This file summarizes the major work completed so far on the current modular Fant
 ## Characters, Names, Lineage, And Cultural Drift
 
 - Added the agent model in `fantasy_engine/characters/person.py`.
-- Expanded agents with identity and simulation fields including `agent_id`, `gender`, `culture_id`, `role`, `grudges`, and lifecycle data.
+- Expanded agents with identity and simulation fields including `agent_id`, `gender`, `culture_id`, `faith_id`, `role`, `grudges`, explicit court-bond state, bereavement pressure, and lifecycle data.
 - Added lineage metadata to agents: `given_name`, `byname`, `dynasty_name`, and `parent_ids`.
 - Built procedural naming in `fantasy_engine/characters/names.py`.
 - Added `MarkovNameGenerator`, `CultureNameSystem`, `NameEvolution`, and `NameRegistry`.
@@ -118,6 +127,21 @@ This file summarizes the major work completed so far on the current modular Fant
 - Added a follow-up continuity rule so later replacements on the origin court branch remain tied to the origin ruling dynasty.
 - Added explicit history-linking so shortage-era court stress can now be traced forward into defections.
 - Added and validated memory-weighted defection targeting so prior aid, war, and prior defection history can change where a court member defects.
+
+## Court Bonds And Personal Consequence
+
+- Added explicit court-bond tracking on agents so close kinship and direct personal ties can be modeled separately from dynasty labels alone.
+- Added bereavement pressure in `fantasy_engine/systems/characters.py` so bonded court members can carry grief and loyalty shock after personal loss.
+- Added explicit `bereavement` history events so succession-era personal loss is legible in the existing cause/effect archive.
+
+## Kin Fallout, Households, Heroes, And Holy War
+
+- Added sibling-like kin inference from shared parent lineage so personal consequence can extend beyond direct parent-child bonds.
+- Added lingering estrangement pressure and explicit `estrangement` history events so defection can fracture courts at the kin layer instead of only shifting political personnel.
+- Added explicit consort and household state for ruling courts so marriages and heirs can be modeled with a minimal household context.
+- Added profession state to agents so court and faction figures hold explicit callings beyond title alone.
+- Added battle-driven hero emergence so successful generals can gain heroic titles and reputation that affect later campaign strength.
+- Added explicit `holy_war` history events and diplomacy-side confessional pressure so faith difference can contribute directly to war selection.
 
 ## Demo Output Improvements
 
@@ -144,6 +168,10 @@ This file summarizes the major work completed so far on the current modular Fant
 ## Regression Tests
 
 - Added `tests/test_lineage_and_culture.py` using `unittest`.
+- Added `tests/test_faith_pressure.py` for the focused Phase 7 faith and schism-pressure regressions.
+- Added `tests/test_personal_consequence.py` for the focused Phase 8 court-bond and bereavement regressions.
+- Added `tests/test_heroes_and_professions.py` for the focused Phase 11 profession and hero-emergence regressions.
+- Added `tests/test_holy_war.py` for the focused Phase 12 confessional-war regressions.
 - Added `tests/test_legends_reader.py` for the new legends reader and run-end legends rendering surface.
 - Added `tests/test_terrain_properties.py` for the focused Phase 6 terrain regressions.
 - Added `tests/test_step_result_and_controller.py` for the live runtime, controller, renderer, and watch controls.
@@ -174,6 +202,17 @@ This file summarizes the major work completed so far on the current modular Fant
   - the Rich run-end renderer can print legend summaries next to recent cause/effect links
   - otherwise comparable regions can produce different harvests because explicit terrain changes harvest potential
   - otherwise comparable armies can lose efficiency and spend more supplies when campaigning across harsher corridor terrain
+  - a shortage-era crisis can raise explicit schism pressure through a traceable faith event
+  - the same present-day civilization can accumulate more schism pressure when its court faith is misaligned with the realm's active faith
+  - ruler death can create explicit bereavement pressure for a bonded heir through a traceable personal-loss event
+  - otherwise equivalent successor courts can diverge because one ruler is still carrying lingering bereavement pressure
+  - defection can create explicit estrangement pressure for sibling-like kin through a traceable personal-loss event
+  - otherwise equivalent courts can diverge because one heir is still carrying lingering estrangement pressure after defection
+  - ruling households can form explicit marriage state and generate heirs from household context during succession
+  - battle victory can raise an explicit hero from a professional commander role
+  - heroic reputation can change later campaign power for the same otherwise equivalent force
+  - confessional pressure can bias war-target choice for the same otherwise equivalent crisis state
+  - major faith-opposed wars can emit an explicit holy-war event chained from war declaration
 
 ## Legacy Archive Cleanup
 
@@ -209,14 +248,31 @@ This file summarizes the major work completed so far on the current modular Fant
 - Confirmed the focused Phase 6 terrain module passes.
 - Confirmed the broader focused regression surface still passes with terrain included: `tests.test_terrain_properties`, `tests.test_legends_reader`, `tests.test_lineage_and_culture`, and `tests.test_step_result_and_controller`.
 - Confirmed the compact non-watch demo still runs after the Phase 6 terrain integration.
+- Confirmed the focused Phase 7 faith module passes.
+- Confirmed the broader focused regression surface still passes with faith pressure included: `tests.test_faith_pressure`, `tests.test_terrain_properties`, `tests.test_legends_reader`, `tests.test_lineage_and_culture`, and `tests.test_step_result_and_controller`.
+- Confirmed the compact non-watch demo still runs after the Phase 7 faith-pressure integration.
+- Confirmed the focused Phase 8 personal-consequence module passes.
+- Confirmed the Phase 8 adjacent validation surface passes together: `tests.test_personal_consequence`, `tests.test_lineage_and_culture`, `tests.test_legends_reader`, and `tests.test_step_result_and_controller`.
+- Confirmed the compact non-watch demo still runs after the Phase 8 court-bond and bereavement integration.
+- Confirmed the focused Phase 11 profession and hero module passes.
+- Confirmed the focused Phase 12 holy-war module passes.
+- Confirmed the broader focused regression surface passes together with the new kin, household, hero, profession, and holy-war slices: `tests.test_personal_consequence`, `tests.test_heroes_and_professions`, `tests.test_holy_war`, `tests.test_faith_pressure`, `tests.test_terrain_properties`, `tests.test_legends_reader`, `tests.test_lineage_and_culture`, and `tests.test_step_result_and_controller`.
+- Confirmed the compact non-watch demo still runs after the Phase 9 to 12 integration.
 
 ## Useful Commands Used For Validation
 
 - `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe main.py`
 - `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_terrain_properties`
+- `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_faith_pressure`
+- `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_personal_consequence`
+- `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_heroes_and_professions`
+- `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_holy_war`
 - `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_legends_reader`
 - `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_lineage_and_culture`
 - `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_step_result_and_controller`
+- `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_personal_consequence tests.test_lineage_and_culture tests.test_legends_reader tests.test_step_result_and_controller`
+- `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_personal_consequence tests.test_heroes_and_professions tests.test_holy_war tests.test_faith_pressure tests.test_terrain_properties tests.test_legends_reader tests.test_lineage_and_culture tests.test_step_result_and_controller`
+- `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_faith_pressure tests.test_terrain_properties tests.test_legends_reader tests.test_lineage_and_culture tests.test_step_result_and_controller`
 - `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_terrain_properties tests.test_legends_reader tests.test_lineage_and_culture tests.test_step_result_and_controller`
 - `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -m unittest tests.test_legends_reader tests.test_lineage_and_culture tests.test_step_result_and_controller`
 - `c:/Users/Favour/Documents/Fantasy Engine/.venv/Scripts/python.exe -c "import main; main.run_demo(years=2)"`
@@ -264,5 +320,5 @@ This file summarizes the major work completed so far on the current modular Fant
 - The active watch mode is intentionally layered above the deterministic simulation core rather than embedding wall-clock behavior into the engine.
 - The Rich dashboard is intended for terminal observation, not archival reporting.
 - The tests now cover lineage/culture behavior plus the live runner and controller surface, but broader economic or military regression coverage is still limited.
-- The current roadmap phases are complete through Phase 6.
-- The next approved phase is Phase 7 faith formation and schism pressure, and it should begin with the smallest explicit faith slice that can alter legitimacy or crisis behavior in a focused regression.
+- The current roadmap phases are complete through Phase 12.
+- No next phase is approved yet; the next step should be to define a fresh post-Phase-12 target before further source changes.

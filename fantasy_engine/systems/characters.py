@@ -58,6 +58,14 @@ class CharacterSystem:
             - needs.belonging * 0.020
         )
 
+        if ruler.faith_id != civilization.faith_id:
+            ruler.grievance = clamp(ruler.grievance + 1.4 + civilization.schism_pressure * 0.02)
+            ruler.authority = clamp(ruler.authority - 1.2 - civilization.faith_alignment_gap() * 2.5)
+            ruler.loyalty = clamp(ruler.loyalty - 1.0 - civilization.schism_pressure * 0.01)
+
+        self._apply_bereavement_effects(ruler, ruler=True)
+        self._apply_estrangement_effects(ruler, ruler=True)
+
         if civilization.recovery_window > 0:
             ruler.authority = clamp(ruler.authority + 1.4)
             ruler.fatigue = clamp(ruler.fatigue - 1.8)
@@ -122,6 +130,13 @@ class CharacterSystem:
                 - needs.esteem * 0.010
             )
 
+            if member.faith_id != civilization.faith_id:
+                member.grievance = clamp(member.grievance + 0.8 + civilization.schism_pressure * 0.015)
+                member.loyalty = clamp(member.loyalty - 0.7 - max(0.0, 45.0 - civilization.legitimacy) * 0.02)
+
+            self._apply_bereavement_effects(member, ruler=member.role == "Ruler")
+            self._apply_estrangement_effects(member, ruler=member.role == "Ruler")
+
             for enemy_name in civilization.active_wars:
                 member.add_grudge(enemy_name, 2.0 if member.role in {"General", "Ruler"} else 0.8)
 
@@ -148,7 +163,7 @@ class CharacterSystem:
         member.alive = False
         if member.role == "Ruler":
             old_ruler, new_ruler = civilization.promote_heir(world.rng)
-            world.history.record_event(
+            succession_event = world.history.record_event(
                 HistoryEvent(
                     year=context.year,
                     season=context.season,
@@ -166,10 +181,11 @@ class CharacterSystem:
                     },
                 )
             )
+            self._apply_personal_loss(world, civilization, lost_member=old_ruler, context=context, trigger_event=succession_event)
             return
 
         replacement = civilization.replace_court_member(world.rng, member.role, parent=member, dynasty_name=member.dynasty_name)
-        world.history.record_event(
+        death_event = world.history.record_event(
             HistoryEvent(
                 year=context.year,
                 season=context.season,
@@ -186,6 +202,7 @@ class CharacterSystem:
                 },
             )
         )
+        self._apply_personal_loss(world, civilization, lost_member=member, context=context, trigger_event=death_event)
 
     def _check_defection(self, world: CharacterWorld, civilization: "Civilization", context: TickContext) -> None:
         for role in ("Diplomat", "General"):
@@ -234,6 +251,7 @@ class CharacterSystem:
                 role,
                 parent=civilization.ruler,
                 dynasty_name=civilization.ruler.dynasty_name,
+                faith_id=civilization.ruler.faith_id,
             )
             if role == "Diplomat":
                 target.court.diplomat = member
@@ -245,7 +263,7 @@ class CharacterSystem:
             member.grievance = max(0.0, member.grievance - 20.0)
             target.adjust_relation(civilization.name, -4.0)
             civilization.adjust_relation(target.name, -12.0)
-            world.history.record_event(
+            defection_event = world.history.record_event(
                 HistoryEvent(
                     year=context.year,
                     season=context.season,
@@ -267,6 +285,7 @@ class CharacterSystem:
                     },
                 )
             )
+            self._apply_personal_separation(world, civilization, separated_member=member, context=context, trigger_event=defection_event)
 
     def _defection_need_pressure(self, member) -> float:
         return (
@@ -275,6 +294,116 @@ class CharacterSystem:
             + member.needs.belonging * 0.30
             + member.needs.esteem * 0.20
         )
+
+    def _apply_bereavement_effects(self, member, *, ruler: bool) -> None:
+        if member.bereavement_load <= 0.0:
+            return
+        member.grievance = clamp(member.grievance + member.bereavement_load * 0.035)
+        member.loyalty = clamp(member.loyalty - member.bereavement_load * 0.028)
+        if ruler:
+            member.authority = clamp(member.authority - member.bereavement_load * 0.020)
+        member.bereavement_load = max(0.0, member.bereavement_load - 2.5)
+
+    def _apply_estrangement_effects(self, member, *, ruler: bool) -> None:
+        if member.estrangement_load <= 0.0:
+            return
+        member.grievance = clamp(member.grievance + member.estrangement_load * 0.028)
+        member.loyalty = clamp(member.loyalty - member.estrangement_load * 0.024)
+        if ruler:
+            member.authority = clamp(member.authority - member.estrangement_load * 0.015)
+        member.estrangement_load = max(0.0, member.estrangement_load - 2.0)
+
+    def _apply_personal_loss(
+        self,
+        world: CharacterWorld,
+        civilization: "Civilization",
+        *,
+        lost_member: "Agent",
+        context: TickContext,
+        trigger_event: HistoryEvent,
+    ) -> None:
+        for subject in civilization.court_members():
+            if not subject.alive or subject.agent_id == lost_member.agent_id:
+                continue
+            if not subject.is_bonded_to(lost_member.agent_id):
+                continue
+
+            pressure = 16.0 if lost_member.role == "Ruler" else 10.0
+            subject.bereavement_load = clamp(subject.bereavement_load + pressure)
+            subject.grievance = clamp(subject.grievance + pressure * 0.45)
+            subject.loyalty = clamp(subject.loyalty - pressure * 0.38)
+            if subject.role == "Ruler":
+                subject.authority = clamp(subject.authority - pressure * 0.24)
+
+            relation_label = subject.bond_label(lost_member.agent_id)
+            world.history.record_event(
+                HistoryEvent(
+                    year=context.year,
+                    season=context.season,
+                    event_type="bereavement",
+                    civilization=civilization.name,
+                    details=(
+                        f"{subject.name} carried fresh {relation_label} grief after losing {lost_member.name}, "
+                        f"and the shock unsettled the court."
+                    ),
+                    severity="major" if lost_member.role == "Ruler" else "normal",
+                    caused_by=trigger_event.event_id,
+                    data={
+                        "subject": subject.name,
+                        "subject_id": subject.agent_id,
+                        "lost_relation": lost_member.name,
+                        "lost_relation_id": lost_member.agent_id,
+                        "relationship": relation_label,
+                        "bereavement_load": round(subject.bereavement_load, 1),
+                    },
+                )
+            )
+
+    def _apply_personal_separation(
+        self,
+        world: CharacterWorld,
+        civilization: "Civilization",
+        *,
+        separated_member: "Agent",
+        context: TickContext,
+        trigger_event: HistoryEvent,
+    ) -> None:
+        for subject in civilization.court_members():
+            if not subject.alive or subject.agent_id == separated_member.agent_id:
+                continue
+            relationship = subject.relationship_to(separated_member)
+            if relationship is None:
+                continue
+
+            pressure = 12.0 if relationship == "sibling" else 8.0
+            subject.estrangement_load = clamp(subject.estrangement_load + pressure)
+            subject.grievance = clamp(subject.grievance + pressure * 0.38)
+            subject.loyalty = clamp(subject.loyalty - pressure * 0.30)
+            if subject.role == "Ruler":
+                subject.authority = clamp(subject.authority - pressure * 0.18)
+
+            world.history.record_event(
+                HistoryEvent(
+                    year=context.year,
+                    season=context.season,
+                    event_type="estrangement",
+                    civilization=civilization.name,
+                    details=(
+                        f"{subject.name} reeled from {relationship} estrangement after {separated_member.name} defected from the court, "
+                        f"and the rupture deepened private grievance."
+                    ),
+                    severity="normal",
+                    caused_by=trigger_event.event_id,
+                    data={
+                        "subject": subject.name,
+                        "subject_id": subject.agent_id,
+                        "lost_relation": separated_member.name,
+                        "lost_relation_id": separated_member.agent_id,
+                        "relationship": relationship,
+                        "estrangement_load": round(subject.estrangement_load, 1),
+                    },
+                )
+            )
 
     def _maybe_record_recovery(self, world: CharacterWorld, civilization: "Civilization", context: TickContext) -> None:
         if civilization.unrest > 35.0 or civilization.shortage_streak > 0:

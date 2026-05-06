@@ -10,10 +10,13 @@
   "recovery": "Recovery",
   "famine": "Famine",
   "unrest": "Civil Unrest",
+  "schism_pressure": "Schism Pressure",
   "faction_pressure": "Faction Pressure",
   "foreign_backing": "Foreign Backing",
   "faction_coup": "Faction Coup",
   "court_death": "Court Death",
+  "bereavement": "Bereavement",
+  "estrangement": "Estrangement",
   "defection": "Defection",
   "succession": "Succession",
   "migration": "Migration Wave",
@@ -24,6 +27,8 @@
   "route_severed": "Route Severed",
   "route_reopened": "Route Reopened",
   "battle": "Battle",
+  "hero_rises": "Hero Rises",
+  "holy_war": "Holy War",
   "diplomatic_peace": "Peace Treaty",
   "annual_summary": "Annual Summary"
 }

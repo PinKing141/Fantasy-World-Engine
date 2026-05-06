@@ -29,6 +29,7 @@ class MilitaryState:
 @dataclass(slots=True)
 class CourtRoster:
     ruler: Agent
+    consort: Agent
     heir: Agent
     general: Agent
     diplomat: Agent
@@ -45,10 +46,19 @@ class Civilization:
         "Frostmere": "northlands",
         "Sunscar Flats": "desert",
     }
+    REGION_FAITHS = {
+        "Greenreach Vale": "river_saints",
+        "Ashen Steppe": "sky_fathers",
+        "Ironroot Basin": "ancestor_throne",
+        "Stormcoast March": "tide_covenant",
+        "Frostmere": "winter_oath",
+        "Sunscar Flats": "sun_creed",
+    }
 
     name: str
     region: Region
     culture_id: str
+    faith_id: str
     population: int
     farmland: int
     grain_stores: int
@@ -77,10 +87,13 @@ class Civilization:
     culture_origin_id: str | None = None
     culture_generation: int = 0
     culture_shift_cooldown: int = 0
+    faith_origin_id: str | None = None
+    schism_pressure: float = 0.0
 
     @classmethod
     def from_region(cls, name: str, region: Region, rng: SeededRNG) -> "Civilization":
         culture_id = cls.REGION_CULTURES.get(region.name, "frontier")
+        faith_id = cls.REGION_FAITHS.get(region.name, "river_saints")
         farmland = rng.randint(55, 105)
         population = rng.randint(7000, 17000)
         grain_stores = rng.randint(70, 140)
@@ -88,14 +101,20 @@ class Civilization:
         treasury = rng.randint(75, 150)
         stability = rng.uniform(48.0, 72.0)
         legitimacy = rng.uniform(42.0, 76.0)
-        ruler = Agent.create(rng, name, "Ruler", culture_id=culture_id)
+        ruler = Agent.create(rng, name, "Ruler", culture_id=culture_id, faith_id=faith_id)
+        consort = Agent.create(rng, name, "Consort", culture_id=culture_id, faith_id=faith_id)
+        household_id = cls._new_household_id(name, rng)
+        ruler.marry(consort, household_id)
         court = CourtRoster(
             ruler=ruler,
-            heir=Agent.create(rng, name, "Heir", culture_id=culture_id, parent=ruler, dynasty_name=ruler.dynasty_name),
-            general=Agent.create(rng, name, "General", culture_id=culture_id),
-            diplomat=Agent.create(rng, name, "Diplomat", culture_id=culture_id),
-            steward=Agent.create(rng, name, "Steward", culture_id=culture_id),
+            consort=consort,
+            heir=Agent.create(rng, name, "Heir", culture_id=culture_id, faith_id=faith_id, parent=ruler, co_parent=consort, dynasty_name=ruler.dynasty_name),
+            general=Agent.create(rng, name, "General", culture_id=culture_id, faith_id=faith_id),
+            diplomat=Agent.create(rng, name, "Diplomat", culture_id=culture_id, faith_id=faith_id),
+            steward=Agent.create(rng, name, "Steward", culture_id=culture_id, faith_id=faith_id),
         )
+        ruler.add_bond(court.heir.agent_id)
+        court.heir.add_bond(ruler.agent_id)
         military = MilitaryState(
             standing_forces=rng.randint(420, 920),
             levy_pool=rng.randint(900, 2200),
@@ -107,25 +126,26 @@ class Civilization:
                 name="Commoners",
                 agenda="food security",
                 influence=rng.uniform(0.35, 0.55),
-                leader=Agent.create(rng, name, "Commoner Tribune", culture_id=culture_id),
+                leader=Agent.create(rng, name, "Commoner Tribune", culture_id=culture_id, faith_id=faith_id),
             ),
             Faction(
                 name="Nobility",
                 agenda="legitimacy",
                 influence=rng.uniform(0.20, 0.35),
-                leader=Agent.create(rng, name, "Noble Speaker", culture_id=culture_id),
+                leader=Agent.create(rng, name, "Noble Speaker", culture_id=culture_id, faith_id=faith_id),
             ),
             Faction(
                 name="Military",
                 agenda="order",
                 influence=rng.uniform(0.18, 0.30),
-                leader=Agent.create(rng, name, "Military Leader", culture_id=culture_id),
+                leader=Agent.create(rng, name, "Military Leader", culture_id=culture_id, faith_id=faith_id),
             ),
         ]
         return cls(
             name=name,
             region=region,
             culture_id=culture_id,
+            faith_id=faith_id,
             population=population,
             farmland=farmland,
             grain_stores=grain_stores,
@@ -138,6 +158,7 @@ class Civilization:
             military=military,
             factions=factions,
             culture_origin_id=culture_id,
+            faith_origin_id=faith_id,
         )
 
     @property
@@ -163,12 +184,17 @@ class Civilization:
     def court_members(self) -> list[Agent]:
         return [self.court.ruler, self.court.heir, self.court.general, self.court.diplomat, self.court.steward]
 
+    def household_members(self) -> list[Agent]:
+        return [self.court.ruler, self.court.consort, self.court.heir]
+
     def court_member(self, role: str) -> Agent | None:
         normalized = role.lower()
         if normalized == "ruler":
             return self.court.ruler
         if normalized == "heir":
             return self.court.heir
+        if normalized == "consort":
+            return self.court.consort
         if normalized == "general":
             return self.court.general
         if normalized == "diplomat":
@@ -183,8 +209,10 @@ class Civilization:
         role: str,
         *,
         parent: Agent | None = None,
+        co_parent: Agent | None = None,
         parent_name: str | None = None,
         dynasty_name: str | None = None,
+        faith_id: str | None = None,
     ) -> Agent:
         lineage_parent = parent or self.court_member(role) or self.ruler
         inherited_dynasty = dynasty_name or (lineage_parent.dynasty_name if lineage_parent is not None else self.ruler.dynasty_name)
@@ -193,15 +221,22 @@ class Civilization:
             self.name,
             role,
             culture_id=self.culture_id,
+            faith_id=faith_id or self.faith_id,
             parent=lineage_parent,
+            co_parent=co_parent,
             parent_name=parent_name,
             dynasty_name=inherited_dynasty,
         )
+        if lineage_parent is not None:
+            lineage_parent.add_bond(replacement.agent_id)
+            replacement.add_bond(lineage_parent.agent_id)
         if role == "Ruler":
             self.court.ruler = replacement
             self.ruler = replacement
         elif role == "Heir":
             self.court.heir = replacement
+        elif role == "Consort":
+            self.court.consort = replacement
         elif role == "General":
             self.court.general = replacement
         elif role == "Diplomat":
@@ -216,8 +251,43 @@ class Civilization:
         new_ruler.retitle("Ruler")
         self.court.ruler = new_ruler
         self.ruler = new_ruler
-        self.replace_court_member(rng, "Heir", parent=new_ruler, dynasty_name=new_ruler.dynasty_name)
+        self._form_new_ruling_household(rng)
+        self.replace_court_member(
+            rng,
+            "Heir",
+            parent=new_ruler,
+            co_parent=self.court.consort,
+            dynasty_name=new_ruler.dynasty_name,
+            faith_id=new_ruler.faith_id,
+        )
         return old_ruler, new_ruler
+
+    @staticmethod
+    def _new_household_id(name: str, rng: SeededRNG) -> str:
+        return f"{name.lower().replace(' ', '_')}_household_{rng.randint(1000, 9999)}"
+
+    def _form_new_ruling_household(self, rng: SeededRNG) -> None:
+        new_consort = Agent.create(rng, self.name, "Consort", culture_id=self.culture_id, faith_id=self.faith_id)
+        household_id = self._new_household_id(self.name, rng)
+        self.ruler.marry(new_consort, household_id)
+        self.court.consort = new_consort
+
+    def faith_alignment_gap(self) -> float:
+        weights = {
+            "Ruler": 1.0,
+            "Heir": 0.8,
+            "General": 0.35,
+            "Diplomat": 0.35,
+            "Steward": 0.35,
+        }
+        total_weight = 0.0
+        mismatch_weight = 0.0
+        for member in self.court_members():
+            weight = weights.get(member.role, 0.25)
+            total_weight += weight
+            if member.faith_id != self.faith_id:
+                mismatch_weight += weight
+        return mismatch_weight / max(1.0, total_weight)
 
     def adopt_descendant_culture(self, new_culture_id: str) -> None:
         self.culture_id = new_culture_id
@@ -243,7 +313,7 @@ class Civilization:
 
     def status_line(self) -> str:
         return (
-            f"{self.name}: culture={self.culture_id}, ruler={self.ruler.name}, pop={self.population}, grain={self.grain_stores}, "
+            f"{self.name}: culture={self.culture_id}, faith={self.faith_id}, ruler={self.ruler.name}, pop={self.population}, grain={self.grain_stores}, "
             f"food={self.food_stores}, arms={self.military.weapons_stockpile}, supplies={self.military.supply_stockpile}, "
-            f"stability={self.stability:.1f}, legitimacy={self.legitimacy:.1f}, unrest={self.unrest:.1f}, wars={len(self.active_wars)}"
+            f"stability={self.stability:.1f}, legitimacy={self.legitimacy:.1f}, unrest={self.unrest:.1f}, schism={self.schism_pressure:.1f}, wars={len(self.active_wars)}"
         )

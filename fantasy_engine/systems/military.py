@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fantasy_engine.app.protocols import MilitaryWorld
+from fantasy_engine.characters.person import clamp
 from fantasy_engine.core.engine import Phase, TickContext
 from fantasy_engine.core.events import HistoryEvent
 
@@ -88,7 +89,7 @@ class MilitarySystem:
         winner.court.general.add_grudge(loser.name, 6.0)
         loser.court.general.add_grudge(winner.name, 9.0)
 
-        world.history.record_event(
+        battle_event = world.history.record_event(
             HistoryEvent(
                 year=context.year,
                 season=context.season,
@@ -116,6 +117,7 @@ class MilitarySystem:
                 },
             )
         )
+        self._raise_hero_if_earned(world, context, winner, battle_event, raid_margin, route)
 
         if self._should_make_peace(winner, loser):
             winner.active_wars.discard(loser.name)
@@ -167,8 +169,46 @@ class MilitarySystem:
         arms_loss = max(1, int((troops / 180) * max(1.0, route.terrain.exposure)))
         supply_ratio = min(1.1, max(0.35, civilization.military.supply_stockpile / max(1, supply_cost)))
         armed_ratio = min(1.05, max(0.40, civilization.military.weapons_stockpile / max(1, troops / 12)))
-        command_ratio = (civilization.court.general.competence + civilization.ruler.authority) / 170.0
+        hero_ratio = 1.0 + civilization.court.general.heroic_reputation / 180.0
+        command_ratio = ((civilization.court.general.competence + civilization.ruler.authority) / 170.0) * hero_ratio
         fatigue_ratio = max(0.45, 1.0 - civilization.court.general.fatigue / 140.0)
         terrain_ratio = max(0.70, 1.0 / (route.terrain.travel_difficulty * 0.65 + route.terrain.exposure * 0.20 + route.terrain.chokepoint * 0.15))
         power = troops * supply_ratio * armed_ratio * command_ratio * fatigue_ratio * terrain_ratio * world.rng.uniform(0.88, 1.12) / 16.0
         return power, troops, supply_cost, arms_loss
+
+    def _raise_hero_if_earned(
+        self,
+        world: MilitaryWorld,
+        context: TickContext,
+        winner: "Civilization",
+        battle_event: HistoryEvent,
+        raid_margin: float,
+        route: object,
+    ) -> None:
+        general = winner.court.general
+        general.heroic_reputation = clamp(general.heroic_reputation + max(8.0, raid_margin * 0.9))
+        if general.heroic_title is not None and general.heroic_reputation < 12.0:
+            return
+        if general.heroic_title is None:
+            general.heroic_title = f"the {route.terrain.name.title()} Lion"
+        world.history.record_event(
+            HistoryEvent(
+                year=context.year,
+                season=context.season,
+                event_type="hero_rises",
+                civilization=winner.name,
+                other_civilization=battle_event.other_civilization,
+                details=(
+                    f"{general.name}, {winner.name}'s {general.profession}, emerged from the campaign as {general.heroic_title}."
+                ),
+                severity="major",
+                caused_by=battle_event.event_id,
+                data={
+                    "hero": general.name,
+                    "hero_id": general.agent_id,
+                    "profession": general.profession,
+                    "heroic_title": general.heroic_title,
+                    "heroic_reputation": round(general.heroic_reputation, 1),
+                },
+            )
+        )

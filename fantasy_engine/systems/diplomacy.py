@@ -114,7 +114,8 @@ class DiplomacySystem:
         military = civilization.faction_by_name("Military")
         military_pressure = military.pressure if military else 0.0
         foreign_backing_pressure = self._foreign_backing_pressure(world, civilization=civilization, current_year=context.year)
-        aggression_pressure = crisis_pressure + ruler_need_pressure * 0.55 + general_need_pressure * 0.35 + foreign_backing_pressure
+        confessional_pressure = self._confessional_pressure(civilization)
+        aggression_pressure = crisis_pressure + ruler_need_pressure * 0.55 + general_need_pressure * 0.35 + foreign_backing_pressure + confessional_pressure
         if aggression_pressure < 78.0 and military_pressure + general_need_pressure * 0.40 + foreign_backing_pressure < 88.0:
             return
         if (
@@ -137,6 +138,7 @@ class DiplomacySystem:
             score += ruler_need_pressure * 0.08 + general_need_pressure * 0.10
             score += self._foreign_backing_target_bonus(world, civilization=civilization, target=candidate, current_year=context.year)
             score += self._aggression_memory_bonus(world, civilization=civilization, target=candidate, current_year=context.year)
+            score += self._confessional_target_bonus(civilization, candidate)
             if score > best_score:
                 best_score = score
                 target = candidate
@@ -151,7 +153,7 @@ class DiplomacySystem:
             target.active_wars.add(civilization.name)
             civilization.war_cooldown = 3
             target.war_cooldown = max(target.war_cooldown, 2)
-            world.history.record_event(
+            war_event = world.history.record_event(
                 HistoryEvent(
                     year=context.year,
                     season=context.season,
@@ -175,6 +177,56 @@ class DiplomacySystem:
                     },
                 )
             )
+            self._maybe_record_holy_war(world, civilization=civilization, target=target, context=context, war_event=war_event)
+
+    def _confessional_pressure(self, civilization: "Civilization") -> float:
+        if civilization.schism_pressure <= 0.0:
+            return 0.0
+        ruler_alignment = 1.0 if civilization.ruler.faith_id == civilization.faith_id else 0.65
+        return civilization.schism_pressure * 0.35 * ruler_alignment
+
+    def _confessional_target_bonus(self, civilization: "Civilization", target: "Civilization") -> float:
+        if civilization.faith_id == target.faith_id:
+            return 0.0
+        ruler_alignment = 1.0 if civilization.ruler.faith_id == civilization.faith_id else 0.55
+        heroic_push = civilization.court.general.heroic_reputation * 0.20
+        return civilization.schism_pressure * 0.60 * ruler_alignment + heroic_push
+
+    def _maybe_record_holy_war(
+        self,
+        world: DiplomacyWorld,
+        *,
+        civilization: "Civilization",
+        target: "Civilization",
+        context: TickContext,
+        war_event: HistoryEvent,
+    ) -> None:
+        if civilization.faith_id == target.faith_id:
+            return
+        if civilization.schism_pressure < 24.0:
+            return
+
+        world.history.record_event(
+            HistoryEvent(
+                year=context.year,
+                season=context.season,
+                event_type="holy_war",
+                civilization=civilization.name,
+                other_civilization=target.name,
+                details=(
+                    f"{civilization.ruler.name} cast the war against {target.name} as a defense of the {civilization.faith_id} faith "
+                    f"against {target.faith_id} rivals."
+                ),
+                severity="major",
+                caused_by=war_event.event_id,
+                data={
+                    "ruler": civilization.ruler.name,
+                    "ruler_id": civilization.ruler.agent_id,
+                    "faith": civilization.faith_id,
+                    "target_faith": target.faith_id,
+                },
+            )
+        )
 
     def _drift_relations(self, world: DiplomacyWorld, civilizations: list["Civilization"], *, current_year: int) -> None:
         for civilization in civilizations:
