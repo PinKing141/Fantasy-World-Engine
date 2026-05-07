@@ -19,7 +19,7 @@ This file summarizes the major work completed so far on the current modular Fant
 - Phase 13 is complete: the visual layer can now export a deterministic static world map image from step-result snapshots, showing region positions, labels, terrain names, and route-state differences without changing the Rich runtime.
 - Phase 14 is complete: world generation now uses `noise` to drive deterministic procedural region selection, terrain assignment, position placement, and geography-biased climate values instead of relying only on a fixed blueprint shuffle.
 - Phase 15 is complete: the static map export now generates shapely-based territory polygons from region centers and renders filled territorial areas with explicit border geometry instead of only points and lines.
-- The next approved phase is Phase 16 static terrain surface and cartography, which should stay on the static export layer and add deterministic land, water, coastline, and relief rendering before any interactive runtime work begins.
+- The roadmap has now pivoted away from further Python-side procedural cartography as the next major feature track. The next approved phase is Phase 16 FMG map ingestion and loader hardening, with the legacy procedural map and web runtime kept on maintenance-only bugfix support until an FMG-backed observation bridge exists.
 
 ## Active Runtime Surface
 
@@ -49,7 +49,7 @@ This file summarizes the major work completed so far on the current modular Fant
 - Added climate updates in `fantasy_engine/world/climate.py`.
 - Replaced fixed region blueprint shuffling in `fantasy_engine/world/map.py` with a minimal `noise`-driven procedural geography layer while preserving the existing deterministic world bootstrap and route-construction seam.
 - Added shapely-based territory geometry in `fantasy_engine/world/territories.py` so region centers can resolve into clipped polygonal territory areas for the static export surface.
-- The next map-facing gap is no longer political border geometry; it is terrain cartography on the existing static export surface.
+- The next map-facing gap is no longer border geometry or deeper Python-side cartography. It is reliable FMG ingestion plus a clean adapter from imported map structure into simulation and observer layers.
 
 ## Live Runtime, Controller, And Rich Watch Mode
 

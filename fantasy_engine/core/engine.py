@@ -59,6 +59,10 @@ class AgentBioSnapshot:
     recent_events: tuple[str, ...]
     caused_by_events: tuple[str, ...] = ()
     led_to_events: tuple[str, ...] = ()
+    gender: str = ""
+    profession: str = ""
+    alive: bool = True
+    heroic_title: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +99,8 @@ class CourtSnapshot:
     heir_bio: AgentBioSnapshot | None = None
     general_bio: AgentBioSnapshot | None = None
     diplomat_bio: AgentBioSnapshot | None = None
+    consort_bio: AgentBioSnapshot | None = None
+    steward_bio: AgentBioSnapshot | None = None
 
 
 @dataclass(frozen=True, slots=True)

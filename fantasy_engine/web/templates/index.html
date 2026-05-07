@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Engine — Chronicles of the Realm</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;900&family=IM+Fell+English:ital@0;1&family=IM+Fell+DW+Pica:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body data-default-seed="{{ default_seed }}">
+
+<!-- ===================== MAP CANVAS (full-screen background) ===================== -->
+<div class="map-stage" id="map-stage">
+    <canvas id="map-canvas"></canvas>
+    <div class="map-vignette"></div>
+</div>
+
+<!-- ===================== TOP-LEFT: RULER CARD (CK3) ===================== -->
+<aside class="ruler-card panel" id="ruler-card" data-panel-id="ruler">
+    <div class="panel-titlebar" data-drag-handle>
+        <span class="panel-title">Sovereign</span>
+        <button class="panel-min" data-min-target="ruler-card" title="Minimize">▭</button>
+    </div>
+    <div class="ruler-frame">
+        <div class="ruler-portrait" id="ruler-portrait"></div>
+        <div class="ruler-meta">
+            <div class="ruler-titles" id="ruler-titles">—</div>
+            <div class="ruler-name" id="ruler-name">No Sovereign</div>
+            <div class="ruler-dynasty" id="ruler-dynasty">—</div>
+            <div class="ruler-faith" id="ruler-faith">—</div>
+        </div>
+    </div>
+    <div class="ruler-stats" id="ruler-stats"></div>
+    <div class="ruler-tabs">
+        <button class="rtab active" data-tab="family">Famille</button>
+        <button class="rtab" data-tab="court">Cour</button>
+        <button class="rtab" data-tab="factions">Factions</button>
+        <button class="rtab" data-tab="diplomacy">Relations</button>
+    </div>
+    <div class="ruler-tab-body" id="ruler-tab-body">
+        <p class="placeholder">Click a province to inspect its sovereign.</p>
+    </div>
+</aside>
+
+<!-- ===================== TOP-RIGHT: RESOURCES + CLOCK + SPEED (CK3 corner) ===================== -->
+<div class="hud-top-right">
+    <!-- Resource ribbon -->
+    <div class="resource-strip" id="resource-strip">
+        <div class="resource" title="Population"><span class="r-icon">☗</span><span class="r-value" id="r-population">—</span></div>
+        <div class="resource" title="Treasury"><span class="r-icon">⚜</span><span class="r-value" id="r-treasury">—</span></div>
+        <div class="resource" title="Stability"><span class="r-icon">⚖</span><span class="r-value" id="r-stability">—</span></div>
+        <div class="resource" title="Legitimacy"><span class="r-icon">♛</span><span class="r-value" id="r-legitimacy">—</span></div>
+        <div class="resource" title="Levies"><span class="r-icon">⚔</span><span class="r-value" id="r-military">—</span></div>
+        <div class="resource" title="Active wars"><span class="r-icon">🜨</span><span class="r-value" id="r-wars">—</span></div>
+    </div>
+
+    <!-- Clock + speed pips + gear -->
+    <div class="clock-block">
+        <div class="clock-face">
+            <button class="clock-pause" id="btn-pause" title="Pause / Resume">▮▮</button>
+            <div class="clock-date">
+                <span class="clock-day" id="clock-day">15</span>
+                <span class="clock-month" id="clock-month">SEP</span>
+                <span class="clock-year" id="clock-year">0867</span>
+            </div>
+            <div class="clock-speeds" id="clock-speeds">
+                <button class="pip" data-speed="1" title="Slowest">▎</button>
+                <button class="pip" data-speed="2" title="Slow">▌</button>
+                <button class="pip active" data-speed="3" title="Normal">▊</button>
+                <button class="pip" data-speed="4" title="Fast">█</button>
+                <button class="pip" data-speed="5" title="Fastest">█</button>
+            </div>
+            <button class="clock-gear" id="btn-gear" title="Pause-on settings">⚙</button>
+        </div>
+        <div class="clock-status" id="clock-status">Paused</div>
+
+        <!-- Pause-rules popover (anchored to clock-block) -->
+        <div class="pause-popover" id="pause-popover" hidden>
+            <header class="popover-title">Pause On…</header>
+            <div class="popover-group" id="pause-group-major">
+                <h4>Major Events</h4>
+                <ul id="pause-major-list"></ul>
+            </div>
+            <div class="popover-group" id="pause-group-minor">
+                <h4>Minor Events</h4>
+                <ul id="pause-minor-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Seed control -->
+    <div class="seed-block">
+        <label>SEED <input type="number" id="seed-input" value="{{ default_seed }}" min="0" max="2147483647"></label>
+        <button class="btn-forge" id="btn-forge">⚒ Forge New World</button>
+    </div>
+</div>
+
+<!-- ===================== RIGHT: REALM PANEL ===================== -->
+<aside class="realm-panel panel" id="realm-panel" data-panel-id="realm">
+    <header class="realm-header" data-drag-handle>
+        <span class="realm-flag" id="realm-flag"></span>
+        <span class="realm-title" id="realm-title">Realms of the World</span>
+        <button class="panel-min" data-min-target="realm-panel" title="Minimize">▭</button>
+    </header>
+    <div class="realm-body" id="realm-body"></div>
+</aside>
+
+<!-- ===================== BOTTOM-LEFT: EVENTS / CHRONICLE ===================== -->
+<aside class="chronicle panel" id="chronicle" data-panel-id="chronicle">
+    <header class="chronicle-header" data-drag-handle>
+        <span>Chronicle</span>
+        <span class="chronicle-counter" id="chronicle-counter">0</span>
+        <button class="panel-min" data-min-target="chronicle" title="Minimize">▭</button>
+    </header>
+    <ul class="chronicle-feed" id="chronicle-feed"></ul>
+</aside>
+
+<!-- ===================== BOTTOM-RIGHT: MINIMAP ===================== -->
+<aside class="minimap panel" id="minimap" data-panel-id="minimap">
+    <header class="minimap-header" data-drag-handle>
+        <span>World</span>
+        <button class="panel-min" data-min-target="minimap" title="Minimize">▭</button>
+    </header>
+    <div class="minimap-canvas-wrap">
+        <canvas id="minimap-canvas"></canvas>
+        <div class="minimap-viewport" id="minimap-viewport"></div>
+    </div>
+</aside>
+
+<!-- ===================== MINIMIZED PANELS DOCK ===================== -->
+<div class="dock" id="dock"></div>
+
+<!-- Loading curtain -->
+<div class="boot-curtain" id="boot-curtain">
+    <div class="boot-seal">
+        <div class="boot-ring"></div>
+        <div class="boot-sigil">⚜</div>
+    </div>
+    <div class="boot-text">Calling forth the chronicler…</div>
+</div>
+
+<!-- Pause-reason banner -->
+<div class="pause-banner" id="pause-banner"></div>
+
+<!-- Person card: floating, draggable bio popup -->
+<aside class="person-card panel" id="person-card" data-panel-id="person" hidden>
+    <div class="panel-titlebar" data-drag-handle>
+        <span class="panel-title" id="person-title">Person</span>
+        <button class="panel-min" id="person-close" title="Close">✕</button>
+    </div>
+    <div class="person-card-body" id="person-card-body"></div>
+</aside>
+
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+</body>
+</html>

@@ -576,79 +576,160 @@ Deliverables:
 - explicit territory or border geometry surface
 - focused border-geometry regressions
 
-## Phase 16: Static Terrain Surface And Cartography
+## Phase 16: FMG Map Ingestion And Loader Hardening
 
 Status: Approved
 
 Scope:
 
-- `fantasy_engine/world/map.py`
-- `fantasy_engine/world/territories.py` only if terrain-to-territory alignment needs a narrow geometry hook
-- `fantasy_engine/visual/world_map.py`
-- focused tests only
+- `fantasy_engine/io/`
+- `tests/test_fmg_loader.py`
+- `sample_maps/` fixtures if needed
+- minimal documentation directly tied to the loader surface
 
 Success criteria:
 
-- the static export can render a deterministic terrain surface that reads more like real geography than abstract colored polygons alone
-- the same seed produces the same terrain surface while different seeds can materially change coastlines, landmass shape, terrain bands, or water distribution
-- the export clearly separates land, sea, and at least one higher-relief terrain class such as hills or mountains
-- existing territory polygons, labels, and route overlays remain compatible with the new terrain surface instead of being replaced by it
+- the engine can load Azgaar FMG `.map` files from both plain-text and gzip-compressed saves
+- pack-level and grid-level semantics are explicit and test-backed so later systems do not silently cross-index them
+- FMG sentinel slots such as state `0`, province `0`, and religion `0` remain aligned with cell arrays instead of being collapsed away
+- a real shipped fixture proves the parser matches actual FMG output rather than only synthetic payloads
+- the CLI inspection path is stable enough to use when debugging imported maps
 
 Do not touch:
 
-- interactive runtime work
-- broad political simulation rewrites
-- province or settlement micro-systems
-- hydrology, weather, or erosion simulation beyond the smallest cartography-facing slice
+- simulation bootstrap from FMG state yet
+- broad runtime rewrites
+- legacy procedural-world deletion before the replacement adapter exists
+- speculative UI work beyond bug fixes needed to keep the current observer usable
 
 Deliverables:
 
-- deterministic land and water surface generation for the static exporter
-- coastline and terrain-band rendering layered under existing political geometry
-- focused terrain-surface regressions
+- stable `load_fmg_map(...)` and `parse_fmg_text(...)` ingestion surface
+- focused loader regressions using both synthetic and real FMG saves
+- clear contract for pack-vs-grid data and sentinel handling
 
-## Phase 17: Interactive Map Runtime
+## Phase 17: Simulation Bootstrap From Imported Worlds
 
-Status: Deferred
+Status: Planned
 
 Scope:
 
-- a separate interactive map runtime layer
-- controller integration only where needed to observe existing simulation state
+- a narrow adapter layer that maps FMG states, provinces, cultures, burgs, and cell data into engine bootstrap inputs
+- world initialization surfaces only where the adapter must plug in
 - focused tests only
 
 Success criteria:
 
-- `pygame-ce` powers an interactive observation surface rather than replacing the deterministic simulation core
-- the runtime can inspect geography, routes, and later territory state without breaking the existing Rich watcher or static export path
-- input, camera, and rendering concerns stay outside the simulation core and snapshot construction layers
+- a new simulation world can be initialized from imported FMG political and cultural data without depending on the legacy Python geography pipeline
+- civilization placement, province ownership, and major cultural groupings come from imported FMG structures rather than synthetic procedural placeholders
+- the adapter keeps imported data translation outside the deterministic simulation core instead of spreading FMG assumptions across systems
 
 Do not touch:
 
-- core simulation ownership rules beyond what the interactive observer needs to read
-- broad UI duplication of every existing Rich panel
-- speculative gameplay systems unrelated to observation
+- legends rebuild work
+- broad diplomacy, economy, or military retuning unless the bootstrap seam strictly requires one narrow hook
+- replacement of the current observer surfaces before imported-world bootstrap is proven
 
 Deliverables:
 
-- `pygame-ce` dependency
-- separate interactive map observer runtime
-- focused runtime interaction regressions
+- FMG-to-engine bootstrap adapter
+- focused bootstrap regressions for state, province, and culture import fidelity
+
+## Phase 18: Spatial Query And Ownership Bridge
+
+Status: Planned
+
+Scope:
+
+- point-to-cell or point-to-province query helpers for imported FMG geometry
+- ownership lookup and adjacency derivation layers needed by observer runtimes
+- focused tests only
+
+Success criteria:
+
+- observer surfaces can answer "what province, state, or culture is under this point" without relying on the legacy pixel-grid province map
+- derived province and state adjacency is available in a stable, cached form for later UI and simulation use
+- the bridge remains a read-oriented helper layer rather than a new simulation subsystem
+
+Do not touch:
+
+- broad front-end redesign
+- simulation-side conquest or settlement systems unrelated to the query seam
+- speculative editor tooling
+
+Deliverables:
+
+- spatial lookup surface for imported FMG worlds
+- focused query and adjacency regressions
+
+## Phase 19: FMG-Backed Observation Runtime
+
+Status: Planned
+
+Scope:
+
+- observer runtimes only, including web or other UI layers, once they can read the imported-world bridge
+- controller integration only where needed to inspect existing deterministic simulation state
+- focused tests only
+
+Success criteria:
+
+- the project can observe an FMG-backed world without depending on the legacy procedural world-generation viewer stack
+- runtime UI stays layered above controller and snapshot surfaces
+- legacy procedural observer code is treated as maintenance-only and can be retired once the FMG-backed path is proven
+
+Do not touch:
+
+- broad simulation-core rewrites for UI convenience
+- speculative gameplay systems unrelated to observation
+- replacement of existing controller boundaries
+
+Deliverables:
+
+- one FMG-backed observation path
+- focused observer regressions around inspection and selection behavior
+
+## Phase 20: Historical Legibility On Imported Worlds
+
+Status: Planned
+
+Scope:
+
+- legends and history-reading surfaces that need imported-world naming and geography context
+- narrative visibility hooks only where imported maps expose new ambiguity or loss of legibility
+- focused tests only
+
+Success criteria:
+
+- generated histories remain readable after the map source shifts from internal procedural geography to imported FMG worlds
+- imported province, state, and culture identity survives long enough in history surfaces to let players trace causal chains across centuries
+- the personal layer stays the end target rather than getting buried under map-source plumbing
+
+Do not touch:
+
+- broad prose-generation rewrites
+- new world-generation experiments outside the FMG direction
+- UI polish work that does not improve historical legibility
+
+Deliverables:
+
+- imported-world identity hooks for history and legends surfaces
+- focused legibility regressions
 
 ## Current Immediate Task Order
 
 Phase 15 is complete.
 
-Next approved phase: Phase 16 - Static Terrain Surface And Cartography
+Next approved phase: Phase 16 - FMG Map Ingestion And Loader Hardening
 
 Follow these next, in order:
 
-1. Add one focused regression proving the same seed yields the same terrain-surface signature while different seeds can materially change land, water, or relief layout.
-2. Add the smallest static terrain layer under the current territory export: land and water mask first, then coastline and basic relief banding.
-3. Keep current territory polygons, routes, and labels as overlay layers rather than rewriting the political map surface.
-4. Stop and report before widening into interactive runtime work.
+1. Keep the FMG loader contract stable with focused regressions for real saves, sentinel handling, and pack-vs-grid boundaries.
+2. Do not widen the legacy procedural world viewer into a long-term architecture. Bug fixes to keep it usable are allowed, but expansion work should wait for the FMG-backed bridge.
+3. Once ingestion is stable, build the smallest adapter that can bootstrap engine state from FMG states, provinces, and cultures.
+4. Stop and report before widening into broad runtime replacement or deleting the legacy procedural stack.
 
-These tasks matter because the engine now has deterministic procedural geography and static political territories, but it still does not render a terrain surface that reads like real land and water. The next gap is cartographic terrain rendering, not interactive runtime work.
+These tasks matter because the project's next bottleneck is no longer procedural cartography quality inside Python. The new bottleneck is trustworthy external-world ingestion and a clean bridge from imported FMG structure into the deterministic simulation and observation layers.
 
 ## Stop Conditions
 

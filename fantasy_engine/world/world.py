@@ -397,6 +397,16 @@ class World:
                         heir_bio=self._agent_bio_snapshot(civilization, heir) if heir.alive else None,
                         general_bio=self._agent_bio_snapshot(civilization, civilization.court.general),
                         diplomat_bio=self._agent_bio_snapshot(civilization, civilization.court.diplomat),
+                        consort_bio=(
+                            self._agent_bio_snapshot(civilization, civilization.court.consort)
+                            if civilization.court.consort and getattr(civilization.court.consort, "alive", True)
+                            else None
+                        ),
+                        steward_bio=(
+                            self._agent_bio_snapshot(civilization, civilization.court.steward)
+                            if civilization.court.steward and getattr(civilization.court.steward, "alive", True)
+                            else None
+                        ),
                     ),
                     factions=tuple(
                         FactionSnapshot(
@@ -629,6 +639,10 @@ class World:
             recent_events=tuple(self._format_event_line(event) for event in relevant_events[:4]),
             caused_by_events=tuple(self._agent_caused_by_events(relevant_events)),
             led_to_events=tuple(self._agent_led_to_events(relevant_events)),
+            gender=getattr(agent, "gender", "") or "",
+            profession=getattr(agent, "profession", "") or "",
+            alive=bool(getattr(agent, "alive", True)),
+            heroic_title=getattr(agent, "heroic_title", None),
         )
 
     def _agent_relevant_events(self, civilization: Civilization, agent, *, limit: int = 6) -> list[HistoryEvent]:

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
+from fantasy_engine.procedural_world_main import export_static_map as export_procedural_world_map
+from fantasy_engine.procedural_world_main import run_interactive as run_procedural_interactive
 from fantasy_engine.runner import SimulationController, run_with_rich
 from fantasy_engine.visual import RichDashboardRenderer, export_world_map
 from fantasy_engine.visual.dashboard import make_dashboard_snapshot
@@ -100,7 +103,61 @@ def main() -> None:
         default=None,
         help="Write a static PNG world map for the final observed simulation state to the given path.",
     )
+    parser.add_argument(
+        "--procedural-map",
+        action="store_true",
+        help="Use the standalone procedural world generator for export instead of the simulation snapshot map.",
+    )
+    parser.add_argument(
+        "--interactive-map",
+        action="store_true",
+        help="Open the interactive procedural map runtime.",
+    )
+    parser.add_argument(
+        "--map-width",
+        type=int,
+        default=384,
+        help="Procedural map width in cells when using --procedural-map or --interactive-map.",
+    )
+    parser.add_argument(
+        "--map-height",
+        type=int,
+        default=240,
+        help="Procedural map height in cells when using --procedural-map or --interactive-map.",
+    )
+    parser.add_argument(
+        "--land-fraction",
+        type=float,
+        default=0.42,
+        help="Target land:water ratio for the procedural map generator.",
+    )
+    parser.add_argument(
+        "--no-province-borders",
+        action="store_true",
+        help="Suppress province borders on procedural static exports.",
+    )
     args = parser.parse_args()
+
+    if args.procedural_map or args.interactive_map:
+        should_open_interactive = args.interactive_map or not args.export_map
+        if args.export_map:
+            export_procedural_world_map(
+                seed=args.seed,
+                width=args.map_width,
+                height=args.map_height,
+                land_fraction=args.land_fraction,
+                output_path=Path(args.export_map),
+                show_borders=not args.no_province_borders,
+            )
+        if should_open_interactive:
+            run_procedural_interactive(
+                seed=args.seed,
+                width=args.map_width,
+                height=args.map_height,
+                land_fraction=args.land_fraction,
+            )
+        return
+
     run_demo(
         seed=args.seed,
         years=args.years,
